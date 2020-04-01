@@ -4,7 +4,7 @@ from scipy.special import logsumexp
 def sigmoid(z):
     return 1/(1+np.exp(-z))
 
-def log1pexp(Z):
+def log1pexp(Z, keepdims=False):
     
     z = np.atleast_1d(Z)
     
@@ -22,7 +22,7 @@ def log1pexp(Z):
     
     res = np.where(cond, small, big) 
     
-    return res if res.size > 1 else res.item()
+    return res if res.size > 1 or keepdims else res.item()
 
 def pack_params(a, b, W):
     return np.concatenate([a, b, W.reshape(-1)])

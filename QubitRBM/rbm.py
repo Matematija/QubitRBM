@@ -26,16 +26,22 @@ class RBM:
         
         self.C = 0
 
-        max_extra_W = self.nv*(self.nv - 1)//2
-        self.W_ = sparse.csc_matrix((self.nv, max_extra_W), dtype=np.complex)
+        max_extra_hs = self.nv*(self.nv - 1)//2
+        # self.W_ = sparse.dok_matrix((self.nv, max_extra_hs), dtype=np.complex)
+        self.W_ = None
         self.extra_hs = []
 
     def set_params(self, a, b, W):
+
+        assert len(a) == self.nv, 'Wrong visible bias array length! Expected {}, got {}.'.format(self.nv, len(a))
+        assert len(b) == self.nh, 'Wrong hidden bias array length! Expected {}, got {}.'.format(self.nh, len(b))
+        assert W.shape == self.W.shape, 'Wrong weights shape! Expected {}, got {}.'.format(self.W.shape, W.shape)
+
         self.a = a
         self.b = b
         self.W = W
 
-    def rand_init_weights(self, sigma=1.0):
+    def rand_init_weights(self, sigma=0.1):
         self.a = sigma*(np.random.randn(self.nv) + 1j*np.random.randn(self.nv))
         self.b = sigma*(np.random.randn(self.nh) + 1j*np.random.randn(self.nh))
         self.W = sigma*(np.random.randn(self.nv, self.nh) + 1j*np.random.randn(self.nv, self.nh))
@@ -51,15 +57,14 @@ class RBM:
         term_1 = np.matmul(B, self.a)
         term_2 = utils.log1pexp(self.b + np.matmul(B, self.W)).sum(axis=1)
 
-        if self.num_extra_hs:
-            cols = self.W_[:,self.extra_hs]
-            term_3 = utils.log1pexp(W_.T.dot(B.T).T).sum(axis=1)
+        if self.extra_hs:
+            term_3 = utils.log1pexp(np.matmul(B, self.W_), keepdims=True).sum(axis=1)
         else:
             term_3 = 0
         
         logpsi = self.C + term_1 + term_2 + term_3
         
-        return logpsi if B.shape[0]!=1 else logpsi.item()
+        return logpsi if B.shape[0] != 1 else logpsi.item()
     
     def mcmc_iter(self, init, n_steps, state=None, n=None, verbose=False):
         
@@ -130,7 +135,7 @@ class RBM:
             
     def get_state_vector(self, log=True, normalized=False):
         
-        logpsis = np.fromiter(map(self, self.hilbert_iter()), dtype=np.complex256, count=2**self.nv)
+        logpsis = np.fromiter(map(self, self.hilbert_iter()), dtype=np.complex, count=2**self.nv)
         
         if not normalized:
             
@@ -253,22 +258,28 @@ class RBM:
         """
         self.a[n] += 1j*phi
 
+    def P(self, n, phi):
+        self.X(n)
+        self.RZ(n, phi)
+
     def _add_hidden_unit(self, k, l, Wkc, Wlc):
 
         ### NOT TESTED YET !!!
 
-        a, b = (k, l) if k < l else (l, k)
-        Wac, Wbc = (Wkc, Wlc) if k < l else (Wlc, Wkc)
+        if {k,l} not in self.extra_hs:
+            W_ = np.zeros(shape=[self.nv, len(self.extra_hs)+1], dtype=np.complex)
 
-        i = (self.nv*(self.nv-1)/2) - (self.nv-a)*((self.nv-b)-1)/2 + a - b - 1 # Transform the (a,b) coordinates into the linear index along axis 1 of self.W_
-        p = np.searchsorted(self.extra_hs, i)
+            W_[:,:-1] = self.W_
+            W_[k,-1] = Wkc
+            W_[l,-1] = Wlc
 
-        if p+1 < len(self.extra_hs):
-            if self.extra_hs[p+1] > i:
-                self.extra_hs = np.insert(self.extra_hs, i, p)
+            self.W_ = W_
+            self.extra_hs.append({k,l})
+        else:
+            i = self.extra_hs.index({k,l})
 
-        self.W_[a, i] += Wac
-        self.W_[b, i] += Wbc
+            self.W_[k,i] += Wkc
+            self.W_[l,i] += Wlc 
         
     def RZZ(self, k, l, phi):
         B = np.arccosh(np.exp(1j*phi))
@@ -282,8 +293,4 @@ class RBM:
 
         self._add_hidden_unit(k, l, -2*A, 2*A)
         self.a[k] += 1j*phi/2 + A
-        self.a[l] -= 1j*phi/2 - A 
-
-    def ODPS(self, n, phi):
-        self.X(n)
-        self.RZ(n, phi)
+        self.a[l] += 1j*phi/2 - A 

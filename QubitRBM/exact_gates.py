@@ -9,7 +9,10 @@ def _extend_to_n_qubits(matrix, ns, n_qubits):
     return reduce(sparse.kron, (matrix if i in qubits else I for i in range(n_qubits)))
 
 def _bit(x, k, n):
-    return floor(x/2**(n-k-1)) - 2*floor(x/2**(n-k))
+    """
+    Returns the k-th binary digit of number x, padded with zeros to length n.
+    """
+    return int(bin(x)[2:].rjust(n,'0')[k])
 
 def X(n=1, n_qubits=1):
     x = np.array([[0, 1], [1, 0]], dtype=np.complex)
@@ -28,14 +31,18 @@ def H(n=1, n_qubits=1):
     return _extend_to_n_qubits(h, n, n_qubits)
 
 def RZ(phi, n=1, n_qubits=1):
-    rz = np.array([[1,0],[np.exp(1j*phi)]], dtype=np.complex)
+    rz = np.array([[1, 0],[0, np.exp(1j*phi)]], dtype=np.complex)
+    return _extend_to_n_qubits(rz, n, n_qubits)
+
+def P(phi, n=1, n_qubits=1):
+    rz = np.array([[0, 1],[np.exp(1j*phi), 0]], dtype=np.complex)
     return _extend_to_n_qubits(rz, n, n_qubits)
 
 def CRZ(phi, k, l, n_qubits):
     # Make more efficient if it ever becomes necessary.
 
     g = np.exp(1j*phi)
-    diag = np.fromiter((g if _bit(j,k,n_qubits) and _bit(j,k,n_qubits) else 1 for j in range(2**n_qubits)), dtype=np.complex, count=2**n_qubits)
+    diag = np.fromiter((g if _bit(j, k, n_qubits) and _bit(j, l, n_qubits) else 1 for j in range(2**n_qubits)), dtype=np.complex, count=2**n_qubits)
 
     return sparse.diags(diag, dtype=np.complex)
 
@@ -43,6 +50,6 @@ def RZZ(phi, k, l, n_qubits):
     # Make more efficient if it ever becomes necessary.
 
     g = np.exp(1j*phi)
-    diag = np.fromiter((g if _bit(j,k,n_qubits) != _bit(j,k,n_qubits) else 1 for j in range(2**n_qubits)), dtype=np.complex, count=2**n_qubits)
+    diag = np.fromiter((g if _bit(j,k,n_qubits) != _bit(j,l,n_qubits) else 1 for j in range(2**n_qubits)), dtype=np.complex, count=2**n_qubits)
 
     return sparse.diags(diag, dtype=np.complex)
