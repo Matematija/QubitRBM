@@ -48,30 +48,31 @@ def hadamard_optimization(rbm, n, tol=1e-5, lookback=10, mcmc_params=(500, 100, 
     phi_samples = rbm.get_samples(init=init, n_steps=mcmc_steps, state='h', n=n)
     
     if lr_tau is None:
-        lr_tau = 1000/np.log(lr_init/1e-4)
+        lr_tau = 1000/np.log(lr_init/1e-3)
     
     a = rbm.a.copy() + sigma_a*(np.random.randn(nv) + 1j*np.random.randn(nv))
     b = rbm.b.copy() + sigma_b*(np.random.randn(nh) + 1j*np.random.randn(nh))
     W = rbm.W.copy() + sigma_W*(np.random.randn(nv, nh) + 1j*np.random.randn(nv, nh))
     
-    params = utils.pack_params(a, b, W)
     logpsi = RBM(nv, nh)
     logpsi.set_params(a, b, W)
+    params = utils.pack_params(a, b, W)
 
     history = []
+    F = 0
     F_mean_new = 0.0
     F_mean_old = 0.0
     clock = time()
     t = 0
     
-    while np.abs(F_mean_new - F_mean_old) > tol or t < 2*lookback:
+    while (np.abs(F_mean_new - F_mean_old) > tol or t < 2*lookback + 1) and F < 1-tol:
         
         t += 1
 
         init = np.random.rand(nv) > 0.5
         psi_samples = logpsi.get_samples(init, gap*mcmc_steps+warmup+1)[warmup::gap]
 
-        phipsi = rbm.eval_hadamard(n, psi_samples)
+        phipsi = rbm.eval_H(n, psi_samples)
         psipsi = logpsi(psi_samples)
 
         if fidelity == 'exact': 
@@ -79,8 +80,9 @@ def hadamard_optimization(rbm, n, tol=1e-5, lookback=10, mcmc_params=(500, 100, 
             F = utils.exact_fidelity(psi_vec, target_state)
         elif fidelity == 'mcmc':
             psiphi = logpsi(phi_samples)
-            phiphi = rbm.eval_hadamard(n, phi_samples)
+            phiphi = rbm.eval_H(n, phi_samples)
             F = utils.mcmc_fidelity(psipsi, psiphi, phipsi, phiphi)
+
         history.append(F)
         
         if t > 2*lookback:
@@ -97,15 +99,16 @@ def hadamard_optimization(rbm, n, tol=1e-5, lookback=10, mcmc_params=(500, 100, 
         grad_logF = O.mean(axis=0).conj() - (ratio_psi.reshape(-1,1)*O.conj()).mean(axis=0)/ratio_psi_mean
     
         grad = F*grad_logF
+        # grad = grad_logF
         delta_theta = solve(S + eps*np.eye(S.shape[0]), grad, assume_a='her')
         
         lr = lr_init*np.exp(-t/lr_tau)
         params -= lr*delta_theta
         
-        logpsi.a, logpsi.b, logpsi.W = utils.unpack_params(params)
+        logpsi.a, logpsi.b, logpsi.W = utils.unpack_params(params, nv, nh)
 
         if time() - clock > 10 and verbose:
-            print('Iteration {} | Fidelity = {}'.format(t, F))
+            print('Iteration {} | Fidelity = {} | lr = {}'.format(t, F, lr))
             clock = time()
             
     return logpsi.a, logpsi.b, logpsi.W, history
