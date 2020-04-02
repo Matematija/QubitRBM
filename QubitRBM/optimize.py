@@ -23,8 +23,8 @@ def S_matrix(grad):
     term2 = np.tensordot(grad.conj().mean(axis=0), grad.mean(axis=0), axes=0)
     return term1 - term2
 
-def hadamard_optimization(rbm, n, tol=1e-5, lookback=10, mcmc_params=(500, 100, 1), sigmas=(1e-3, 1e-3, 1e-3),
-    lr_init=1e-2, lr_tau=None, eps=1e-6, fidelity='mcmc', verbose=False):
+def hadamard_optimization(rbm, n, tol=1e-6, lookback=10, mcmc_params=(500, 100, 1), sigmas=(1e-3, 1e-3, 1e-3),
+    lr_init=1e-2, lr_tau=None, lr_min=0.0, eps=1e-6, fidelity='mcmc', verbose=False):
 
     """
     Implements the stochastic reconfiguration algorithm to optimize the application of one H gate on qubit n in machine 'rbm'.
@@ -65,7 +65,7 @@ def hadamard_optimization(rbm, n, tol=1e-5, lookback=10, mcmc_params=(500, 100, 
     clock = time()
     t = 0
     
-    while (np.abs(F_mean_new - F_mean_old) > tol or t < 2*lookback + 1) and F < 1-tol:
+    while (np.abs(F_mean_new - F_mean_old) > tol or t < 2*lookback + 1) and F_mean_new < 1-tol:
         
         t += 1
 
@@ -102,7 +102,8 @@ def hadamard_optimization(rbm, n, tol=1e-5, lookback=10, mcmc_params=(500, 100, 
         # grad = grad_logF
         delta_theta = solve(S + eps*np.eye(S.shape[0]), grad, assume_a='her')
         
-        lr = lr_init*np.exp(-t/lr_tau)
+        lr = max(lr_min, lr_init*np.exp(-t/lr_tau))
+
         params -= lr*delta_theta
         
         logpsi.a, logpsi.b, logpsi.W = utils.unpack_params(params, nv, nh)
