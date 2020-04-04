@@ -26,10 +26,10 @@ class RBM:
         
         self.C = 0
 
-        max_extra_hs = self.nv*(self.nv - 1)//2
+        # max_extra_hs = self.nv*(self.nv - 1)//2
         # self.W_ = sparse.dok_matrix((self.nv, max_extra_hs), dtype=np.complex)
         self.W_ = None
-        self.extra_hs = []
+        self.num_extra_hs = 0
 
     def set_params(self, a, b, W):
 
@@ -57,7 +57,7 @@ class RBM:
         term_1 = np.matmul(B, self.a)
         term_2 = utils.log1pexp(self.b + np.matmul(B, self.W)).sum(axis=1)
 
-        if self.extra_hs:
+        if self.num_extra_hs > 0:
             term_3 = utils.log1pexp(np.matmul(B, self.W_), keepdims=True).sum(axis=1)
         else:
             term_3 = 0
@@ -124,7 +124,7 @@ class RBM:
         B = configs.reshape([-1, self.nv]).astype(np.bool)
         
         ga = configs.copy()
-        gb = sigmoid(self.b + np.matmul(B, self.W))
+        gb = utils.sigmoid(self.b + np.matmul(B, self.W))
         gW = np.matmul(ga[:, :, np.newaxis], gb[:, np.newaxis, :])
         
         return ga, gb, gW
@@ -142,22 +142,22 @@ class RBM:
             if log:
                 return logpsis
             else:
-                return np.exp(logpsis, dtype=np.complex256)
+                return np.exp(logpsis, dtype=np.complex)
         else:
             logZ = logsumexp(2*np.real(logpsis))
             
             if log:
                 return logpsis - 0.5*logZ
             else:
-                return np.exp(logpsis - 0.5*logZ, dtype=np.complex256)
+                return np.exp(logpsis - 0.5*logZ, dtype=np.complex)
         
     def get_lognorm(self, method='mcmc', samples=None, **mcmc_kwargs):
 
-        if method.lower().startswith('ex'):
-            logpsis = np.fromiter(map(self, self.hilbert_iter()), dtype=np.complex256, count=2**self.nv)
+        if method == 'exact':
+            logpsis = np.fromiter(map(self, self.hilbert_iter()), dtype=np.complex, count=2**self.nv)
             return logsumexp(2*np.real(logpsis))
 
-        elif method.lower().startswith('mc'):
+        elif method == 'mcmc':
             
             if samples is None:
                 samples = self.get_samples(**mcmc_kwargs)
@@ -264,22 +264,14 @@ class RBM:
 
     def _add_hidden_unit(self, k, l, Wkc, Wlc):
 
-        ### NOT TESTED YET !!!
+       W_ = np.zeros(shape=[self.nv, self.num_extra_hs+1], dtype=np.complex)
 
-        if {k,l} not in self.extra_hs:
-            W_ = np.zeros(shape=[self.nv, len(self.extra_hs)+1], dtype=np.complex)
+       W_[:,:-1] = self.W_
+       W_[k,-1] = Wkc
+       W_[l,-1] = Wlc
 
-            W_[:,:-1] = self.W_
-            W_[k,-1] = Wkc
-            W_[l,-1] = Wlc
-
-            self.W_ = W_
-            self.extra_hs.append({k,l})
-        else:
-            i = self.extra_hs.index({k,l})
-
-            self.W_[k,i] += Wkc
-            self.W_[l,i] += Wlc 
+       self.W_ = W_
+       self.num_extra_hs += 1
         
     def RZZ(self, k, l, phi):
         B = np.arccosh(np.exp(1j*phi))

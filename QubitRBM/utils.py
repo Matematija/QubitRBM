@@ -8,19 +8,19 @@ def log1pexp(Z, keepdims=False):
     
     z = np.atleast_1d(Z)
     
-    x = np.real(z)
-    y = np.imag(z)
+    x = z.real 
+    y = z.imag
     
-    cond = x < 700
+    cond = x < 500
     notcond = np.logical_not(cond)
     
-    small = np.zeros(shape=z.shape, dtype=z.dtype)
-    big = np.zeros(shape=z.shape, dtype=z.dtype)
+    small = np.zeros_like(z)
+    big = np.zeros_like(z)
     
     np.log1p(np.exp(z, where=cond), out=small, where=cond)
     np.add(x, np.log(np.exp(-x, where=notcond) + np.exp(1j*y, where=notcond), where=notcond), out=big, where=notcond)
     
-    res = np.where(cond, small, big) 
+    res = np.where(cond, small, big)
     
     return res if res.size > 1 or keepdims else res.item()
 
