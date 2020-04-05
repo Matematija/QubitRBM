@@ -23,8 +23,7 @@ class RBM:
         self.W = np.zeros([self.nv, self.nh], dtype=np.complex)
         self.a = np.zeros(self.nv, dtype=np.complex)
         self.b = np.zeros(self.nh, dtype=np.complex)
-        
-        self.C = 0
+        # self.C = 0
 
         # max_extra_hs = self.nv*(self.nv - 1)//2
         # self.W_ = sparse.dok_matrix((self.nv, max_extra_hs), dtype=np.complex)
@@ -62,7 +61,8 @@ class RBM:
         else:
             term_3 = 0
         
-        logpsi = self.C + term_1 + term_2 + term_3
+        # logpsi = self.C + term_1 + term_2 + term_3
+        logpsi = term_1 + term_2 + term_3
         
         return logpsi if B.shape[0] != 1 else logpsi.item()
     
@@ -133,29 +133,24 @@ class RBM:
         for n in range(2**self.nv):
             yield np.fromiter(map(int, np.binary_repr(n, width=self.nv)), dtype=np.bool, count=self.nv)
             
-    def get_state_vector(self, log=True, normalized=False):
+    def get_state_vector(self, normalized=False):
+        """
+        If 'normalized', a normalized wavefunction is returned. Otherwise, a vector of complex log-values of the wavefunction is returned.
+        """
         
         logpsis = np.fromiter(map(self, self.hilbert_iter()), dtype=np.complex, count=2**self.nv)
         
         if not normalized:
-            
-            if log:
-                return logpsis
-            else:
-                return np.exp(logpsis, dtype=np.complex)
+            return logpsis
         else:
-            logZ = logsumexp(2*np.real(logpsis))
-            
-            if log:
-                return logpsis - 0.5*logZ
-            else:
-                return np.exp(logpsis - 0.5*logZ, dtype=np.complex)
+            logZ = logsumexp(2*logpsis.real)
+            return np.exp(logpsis - 0.5*logZ, dtype=np.complex)
         
     def get_lognorm(self, method='mcmc', samples=None, **mcmc_kwargs):
 
         if method == 'exact':
             logpsis = np.fromiter(map(self, self.hilbert_iter()), dtype=np.complex, count=2**self.nv)
-            return logsumexp(2*np.real(logpsis))
+            return logsumexp(2*logpsis.real)
 
         elif method == 'mcmc':
             
@@ -163,45 +158,20 @@ class RBM:
                 samples = self.get_samples(**mcmc_kwargs)
 
             logpsis = self(samples)
-            return logsumexp(2*np.real(logpsis))
+            return logsumexp(2*logpsis.real)
 
         else:
-            raise NotImplementedError('Wrong method/ Expected "mcmc" or "exact", got {}'.format(method))
-    
-    def fidelity(self, other, method='mcmc', samples=None, other_samples=None, **mcmc_kwargs):
-
-        if method.lower() == 'exact':
-            bra = self.get_state_vector(log=False, normalized=True)
-            ket = other.get_state_vector(log=False, normalized=True)
-
-            return np.abs(np.vdot(bra, ket))**2
-
-        elif method.lower() == 'mcmc':
-
-            if samples is None:
-                samples = self.get_samples(**mcmc_kwargs)
-
-            if other_samples is None:
-                other_samples = other.get_samples(**mcmc_kwargs)
-
-            log_phi_over_psi = logsumexp(other(samples) - self(samples)) - np.log(samples.shape[0])
-            log_psi_over_phi = logsumexp(self(other_samples) - other(other_samples)) - np.log(other_samples.shape[0])
-
-            logF = log_phi_over_psi + log_psi_over_phi
-
-            return np.real(np.exp(logF))
-
-        else:
-            raise NotImplementedError('Wrong method. Expected "mcmc" or "exact", got {}'.format(method))
+            raise KeyError('Wrong "method". Expected "mcmc" or "exact", got {}'.format(method))
     
     def eval_X(self, n, configs):
         
         aX = self.a.copy()
         aX[n] = -aX[n]
-        bX = self.b + self.W[n,:]
+        bX = self.b + self.W[n,:].copy()
         WX = self.W.copy()
         WX[n,:] = -WX[n,:]
-        CX = self.C + self.a[n]
+        # CX = self.C + self.a[n]
+        CX = 0
         
         B = configs.reshape([-1, self.nv]).astype(np.bool)
         
@@ -216,7 +186,8 @@ class RBM:
         aZ[n] += 1j*np.pi
         bZ = self.b.copy()
         WZ = self.W.copy()
-        CZ = self.C
+        # CZ = self.C
+        CZ = 0
         
         B = configs.reshape([-1, self.nv]).astype(np.bool)
         
@@ -232,19 +203,19 @@ class RBM:
         """
         Applies the Pauli X gate to qubit n.
         """
-        self.a[n] = -self.a[n]
-        self.b += self.W[n,:]
-        self.W[n,:] = -self.W[n,:]
-        self.C += self.a[n]
+        self.a[n] = -self.a[n].copy()
+        self.b += self.W[n,:].copy()
+        self.W[n,:] = -self.W[n,:].copy()
+        # self.C += self.a[n]
 
     def Y(self, n):
         """
         Applies the Pauli Y gate to qubit n.
         """
-        self.a[n] = -self.a[n] + 1j*np.pi
-        self.b += self.W[n,:]
-        self.W[n,:] = -self.W[n,:]
-        self.C += self.a[n] + 1j*np.pi/2
+        self.a[n] = -self.a[n].copy() + 1j*np.pi
+        self.b += self.W[n,:].copy()
+        self.W[n,:] = -self.W[n,:].copy()
+        # self.C += self.a[n] + 1j*np.pi/2
 
     def Z(self, n):
         """
@@ -266,7 +237,7 @@ class RBM:
 
        W_ = np.zeros(shape=[self.nv, self.num_extra_hs+1], dtype=np.complex)
 
-       W_[:,:-1] = self.W_
+       W_[:,:-1] = self.W_.copy() if self.W_ is not None else None
        W_[k,-1] = Wkc
        W_[l,-1] = Wlc
 

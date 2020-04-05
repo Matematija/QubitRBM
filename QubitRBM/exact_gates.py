@@ -35,8 +35,8 @@ def RZ(phi, n=1, n_qubits=1):
     return _extend_to_n_qubits(rz, n, n_qubits)
 
 def P(phi, n=1, n_qubits=1):
-    rz = np.array([[0, 1],[np.exp(1j*phi), 0]], dtype=np.complex)
-    return _extend_to_n_qubits(rz, n, n_qubits)
+    p = np.array([[0, 1],[np.exp(1j*phi), 0]], dtype=np.complex)
+    return _extend_to_n_qubits(p, n, n_qubits)
 
 def CRZ(phi, k, l, n_qubits):
     # Make more efficient if it ever becomes necessary.
@@ -50,6 +50,6 @@ def RZZ(phi, k, l, n_qubits):
     # Make more efficient if it ever becomes necessary.
 
     g = np.exp(1j*phi)
-    diag = np.fromiter((g if _bit(j,k,n_qubits) != _bit(j,l,n_qubits) else 1 for j in range(2**n_qubits)), dtype=np.complex, count=2**n_qubits)
+    diag = np.fromiter((g if _bit(j, k, n_qubits) != _bit(j, l, n_qubits) else 1 for j in range(2**n_qubits)), dtype=np.complex, count=2**n_qubits)
 
     return sparse.diags(diag, dtype=np.complex)

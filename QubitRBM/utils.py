@@ -4,25 +4,32 @@ from scipy.special import logsumexp
 def sigmoid(z):
     return 1/(1+np.exp(-z))
 
-def log1pexp(Z, keepdims=False):
+# def log1pexp(Z, cutoff=20, keepdims=False):
     
-    z = np.atleast_1d(Z)
+#     z = np.atleast_1d(Z)
+
+#     x = z.real 
+#     y = z.imag
+
+#     cond = x < cutoff
+#     notcond = np.logical_not(cond)
+
+#     small = np.zeros_like(z)
+#     big = np.zeros_like(z)
+
+#     np.log1p(np.exp(z, where=cond), out=small, where=cond)
+#     np.add(x, np.log(np.exp(-x, where=notcond) + np.exp(1j*y, where=notcond), where=notcond), out=big, where=notcond)
+
+#     res = np.where(cond, small, big)
+
+#     return res if res.size > 1 or keepdims else res.item()
+
+def log1pexp(z, keepdims=False):
     
-    x = z.real 
-    y = z.imag
+    pad = np.zeros_like(z)
+    stacked = np.stack([pad, z], axis=0)
     
-    cond = x < 500
-    notcond = np.logical_not(cond)
-    
-    small = np.zeros_like(z)
-    big = np.zeros_like(z)
-    
-    np.log1p(np.exp(z, where=cond), out=small, where=cond)
-    np.add(x, np.log(np.exp(-x, where=notcond) + np.exp(1j*y, where=notcond), where=notcond), out=big, where=notcond)
-    
-    res = np.where(cond, small, big)
-    
-    return res if res.size > 1 or keepdims else res.item()
+    return logsumexp(stacked, axis=0)
 
 def pack_params(a, b, W):
     return np.concatenate([a, b, W.reshape(-1)])
