@@ -23,22 +23,28 @@ class RBM:
         self.W = np.zeros([self.nv, self.nh], dtype=np.complex)
         self.a = np.zeros(self.nv, dtype=np.complex)
         self.b = np.zeros(self.nh, dtype=np.complex)
-        # self.C = 0
 
-        # max_extra_hs = self.nv*(self.nv - 1)//2
-        # self.W_ = sparse.dok_matrix((self.nv, max_extra_hs), dtype=np.complex)
+        self.C = 0.0
+
         self.W_ = None
+        self.b_ = None
         self.num_extra_hs = 0
 
-    def set_params(self, a, b, W):
+    def set_params(self, a=None, b=None, W=None):
 
-        assert len(a) == self.nv, 'Wrong visible bias array length! Expected {}, got {}.'.format(self.nv, len(a))
-        assert len(b) == self.nh, 'Wrong hidden bias array length! Expected {}, got {}.'.format(self.nh, len(b))
-        assert W.shape == self.W.shape, 'Wrong weights shape! Expected {}, got {}.'.format(self.W.shape, W.shape)
+        if a is not None:
+            self.a = a
+        if b is not None:
+            self.b = b
 
-        self.a = a
-        self.b = b
-        self.W = W
+        if W is not None:
+            self.W = W
+            self.nv, self.nh = W.shape
+        else:
+            if a is not None:
+                self.nv = len(a)
+            if b is not None:
+                self.nh = len(b)
 
     def rand_init_weights(self, sigma=0.1):
         self.a = sigma*(np.random.randn(self.nv) + 1j*np.random.randn(self.nv))
@@ -57,12 +63,11 @@ class RBM:
         term_2 = utils.log1pexp(self.b + np.matmul(B, self.W)).sum(axis=1)
 
         if self.num_extra_hs > 0:
-            term_3 = utils.log1pexp(np.matmul(B, self.W_), keepdims=True).sum(axis=1)
+            term_3 = utils.log1pexp(self.b_ + np.matmul(B, self.W_), keepdims=True).sum(axis=1)
         else:
             term_3 = 0
         
-        # logpsi = self.C + term_1 + term_2 + term_3
-        logpsi = term_1 + term_2 + term_3
+        logpsi = self.C + term_1 + term_2 + term_3
         
         return logpsi if B.shape[0] != 1 else logpsi.item()
     
@@ -71,19 +76,19 @@ class RBM:
         assert init.ndim==1 and len(init)==self.nv, "Invalid input."
         
         if state is None:
-            logp = lambda x: 2*np.real(self(x))
+            logp = lambda x: 2*self(x).real
             
         elif isinstance(state, str):
             assert isinstance(n, int), 'n has to be an int!'
             
             if state.lower()[0] == 'h':
-                logp = lambda x: 2*np.real(self.eval_H(n, x))
+                logp = lambda x: 2*self.eval_H(n, x).real
             elif state.lower()[0] == 'x':
-                logp = lambda x: 2*np.real(self.eval_X(n, x))
+                logp = lambda x: 2*self.eval_X(n, x).real
             elif state.lower()[0] == 'z':
-                logp = lambda x: 2*np.real(self.eval_Z(n, x))
+                logp = lambda x: 2*self.eval_Z(n, x).real
             else:
-                raise NotImplementedError('State {} not recognized.'.format(state))
+                raise KeyError('State {} not recognized.'.format(state))
                 
         else:
             raise TypeError('State has to be a string, {} given,'.format(type(state)))
@@ -171,7 +176,7 @@ class RBM:
         WX = self.W.copy()
         WX[n,:] = -WX[n,:]
         # CX = self.C + self.a[n]
-        CX = 0
+        CX = self.C
         
         B = configs.reshape([-1, self.nv]).astype(np.bool)
         
@@ -186,8 +191,7 @@ class RBM:
         aZ[n] += 1j*np.pi
         bZ = self.b.copy()
         WZ = self.W.copy()
-        # CZ = self.C
-        CZ = 0
+        CZ = self.C
         
         B = configs.reshape([-1, self.nv]).astype(np.bool)
         
@@ -208,6 +212,10 @@ class RBM:
         self.W[n,:] = -self.W[n,:].copy()
         # self.C += self.a[n]
 
+        if self.num_extra_hs > 0:
+            self.b_ += self.W_[n,:].copy()
+            self.W_[n,:] = -self.W_[n,:].copy()
+
     def Y(self, n):
         """
         Applies the Pauli Y gate to qubit n.
@@ -216,6 +224,10 @@ class RBM:
         self.b += self.W[n,:].copy()
         self.W[n,:] = -self.W[n,:].copy()
         # self.C += self.a[n] + 1j*np.pi/2
+
+        if self.num_extra_hs > 0:
+            self.b_ += self.W_[n,:].copy()
+            self.W_[n,:] = -self.W_[n,:].copy()
 
     def Z(self, n):
         """
@@ -235,9 +247,13 @@ class RBM:
 
     def _add_hidden_unit(self, k, l, Wkc, Wlc):
 
+       b_ = np.zeros(shape=[self.num_extra_hs+1], dtype=np.complex)
        W_ = np.zeros(shape=[self.nv, self.num_extra_hs+1], dtype=np.complex)
 
-       W_[:,:-1] = self.W_.copy() if self.W_ is not None else None
+       b_[:-1] = self.b_
+       self.b_ = b_
+
+       W_[:,:-1] = self.W_
        W_[k,-1] = Wkc
        W_[l,-1] = Wlc
 
