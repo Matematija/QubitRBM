@@ -2,34 +2,18 @@ import numpy as np
 from scipy.special import logsumexp
 
 def sigmoid(z):
-    return 1/(1+np.exp(-z))
 
-# def log1pexp(Z, cutoff=20, keepdims=False):
-    
-#     z = np.atleast_1d(Z)
+    em = np.exp(-z, where=z.real>=0)
+    ep = np.exp(z, where=z.real<0)
 
-#     x = z.real 
-#     y = z.imag
-
-#     cond = x < cutoff
-#     notcond = np.logical_not(cond)
-
-#     small = np.zeros_like(z)
-#     big = np.zeros_like(z)
-
-#     np.log1p(np.exp(z, where=cond), out=small, where=cond)
-#     np.add(x, np.log(np.exp(-x, where=notcond) + np.exp(1j*y, where=notcond), where=notcond), out=big, where=notcond)
-
-#     res = np.where(cond, small, big)
-
-#     return res if res.size > 1 or keepdims else res.item()
+    return np.where(z.real>=0, 1/(1+em), ep/(1+ep))
 
 def log1pexp(z, keepdims=False):
     
     pad = np.zeros_like(z)
     stacked = np.stack([pad, z], axis=0)
     
-    return logsumexp(stacked, axis=0)
+    return logsumexp(stacked, axis=0, keepdims=keepdims)
 
 def pack_params(a, b, W):
     return np.concatenate([a, b, W.reshape(-1)])

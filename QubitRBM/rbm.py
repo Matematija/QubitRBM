@@ -15,7 +15,7 @@ except Exception as error:
 
 class RBM:
     
-    def __init__(self, n_visible, n_hidden):
+    def __init__(self, n_visible, n_hidden=0):
         
         self.nv = n_visible
         self.nh = n_hidden
@@ -24,10 +24,7 @@ class RBM:
         self.a = np.zeros(self.nv, dtype=np.complex)
         self.b = np.zeros(self.nh, dtype=np.complex)
 
-        self.C = 0.0
-
-        self.W_ = None
-        self.b_ = None
+        self.C = 0
         self.num_extra_hs = 0
 
     def set_params(self, a=None, b=None, W=None):
@@ -51,7 +48,7 @@ class RBM:
         self.b = sigma*(np.random.randn(self.nh) + 1j*np.random.randn(self.nh))
         self.W = sigma*(np.random.randn(self.nv, self.nh) + 1j*np.random.randn(self.nv, self.nh))
         
-    def __call__(self, configs):
+    def __call__(self, configs, fold_imag=False):
 
         """
         Evaluates the natural logarithm of the unnormalized wavefunction.
@@ -61,19 +58,21 @@ class RBM:
         
         term_1 = np.matmul(B, self.a)
         term_2 = utils.log1pexp(self.b + np.matmul(B, self.W)).sum(axis=1)
-
-        if self.num_extra_hs > 0:
-            term_3 = utils.log1pexp(self.b_ + np.matmul(B, self.W_), keepdims=True).sum(axis=1)
-        else:
-            term_3 = 0
         
-        logpsi = self.C + term_1 + term_2 + term_3
+        logpsi = self.C + term_1 + term_2
+
+        if fold_imag:
+            logpsi.imag = (logpsi.imag + np.pi)%(2*np.pi) - np.pi
         
         return logpsi if B.shape[0] != 1 else logpsi.item()
+
+    def fold_imag_params(self):
+        self.C = self.C.real + 1j*((self.C.imag + np.pi)%(2*np.pi) - np.pi)
+        self.a.imag[np.abs(self.a.imag) > np.pi] = (self.a.imag[np.abs(self.a.imag) > np.pi]  + np.pi)%(2*np.pi) - np.pi
+        self.b.imag[np.abs(self.b.imag) > np.pi] = (self.b.imag[np.abs(self.b.imag) > np.pi]  + np.pi)%(2*np.pi) - np.pi
+        self.W.imag[np.abs(self.W.imag) > np.pi] = (self.W.imag[np.abs(self.W.imag) > np.pi]  + np.pi)%(2*np.pi) - np.pi
     
-    def mcmc_iter(self, init, n_steps, state=None, n=None, verbose=False):
-        
-        assert init.ndim==1 and len(init)==self.nv, "Invalid input."
+    def mcmc_iter(self, n_steps, init=None, state=None, n=None, verbose=False):
         
         if state is None:
             logp = lambda x: 2*self(x).real
@@ -93,7 +92,11 @@ class RBM:
         else:
             raise TypeError('State has to be a string, {} given,'.format(type(state)))
         
-        previous = init
+        if init is None:
+            previous = np.random.rand(self.nv) < 0.5
+        else:
+            previous = init
+
         log_prob_old = logp(previous)
         
         accept_counter = 0
@@ -121,14 +124,14 @@ class RBM:
         if verbose:
             print("Acceptance ratio: ", accept_counter/(n_steps-1))
             
-    def get_samples(self, init, n_steps, state=None, n=None, verbose=False):
-        return np.stack(list(self.mcmc_iter(init, n_steps, state, n, verbose)))
+    def get_samples(self, *mcmc_args, **mcmc_kwargs):
+        return np.stack(list(self.mcmc_iter(*mcmc_args, **mcmc_kwargs)))
     
     def grad_log(self, configs):
         
         B = configs.reshape([-1, self.nv]).astype(np.bool)
         
-        ga = configs.copy()
+        ga = configs.copy().astype(np.complex)
         gb = utils.sigmoid(self.b + np.matmul(B, self.W))
         gW = np.matmul(ga[:, :, np.newaxis], gb[:, np.newaxis, :])
         
@@ -175,8 +178,7 @@ class RBM:
         bX = self.b + self.W[n,:].copy()
         WX = self.W.copy()
         WX[n,:] = -WX[n,:]
-        # CX = self.C + self.a[n]
-        CX = self.C
+        CX = self.C + self.a[n]
         
         B = configs.reshape([-1, self.nv]).astype(np.bool)
         
@@ -210,11 +212,7 @@ class RBM:
         self.a[n] = -self.a[n].copy()
         self.b += self.W[n,:].copy()
         self.W[n,:] = -self.W[n,:].copy()
-        # self.C += self.a[n]
-
-        if self.num_extra_hs > 0:
-            self.b_ += self.W_[n,:].copy()
-            self.W_[n,:] = -self.W_[n,:].copy()
+        self.C += self.a[n].copy()
 
     def Y(self, n):
         """
@@ -223,11 +221,7 @@ class RBM:
         self.a[n] = -self.a[n].copy() + 1j*np.pi
         self.b += self.W[n,:].copy()
         self.W[n,:] = -self.W[n,:].copy()
-        # self.C += self.a[n] + 1j*np.pi/2
-
-        if self.num_extra_hs > 0:
-            self.b_ += self.W_[n,:].copy()
-            self.W_[n,:] = -self.W_[n,:].copy()
+        self.C += self.a[n] + 1j*np.pi/2
 
     def Z(self, n):
         """
@@ -245,31 +239,47 @@ class RBM:
         self.X(n)
         self.RZ(n, phi)
 
-    def _add_hidden_unit(self, k, l, Wkc, Wlc):
+    def add_hidden_units(self, num, b_=None, W_=None):
 
-       b_ = np.zeros(shape=[self.num_extra_hs+1], dtype=np.complex)
-       W_ = np.zeros(shape=[self.nv, self.num_extra_hs+1], dtype=np.complex)
+        if b_ is None: 
+           b_ = np.zeros(shape=[num], dtype=np.complex) 
+        if W_ is None:
+           W_ = np.zeros(shape=[self.nv, num], dtype=np.complex)
 
-       b_[:-1] = self.b_
-       self.b_ = b_
+        b = np.zeros(shape=[self.nh+num], dtype=np.complex)
+        W = np.zeros(shape=[self.nv, self.nh+num], dtype=np.complex)
 
-       W_[:,:-1] = self.W_
-       W_[k,-1] = Wkc
-       W_[l,-1] = Wlc
+        b[:-num] = self.b
+        b[-num:] = b_
+        self.b = b
 
-       self.W_ = W_
-       self.num_extra_hs += 1
+        W[:,:-num] = self.W
+        W[:,-num:] = W_
+        self.W = W
+
+        self.num_extra_hs += num
+        self.nh += num
         
     def RZZ(self, k, l, phi):
+
+        self.add_hidden_units(num=1)
+
         B = np.arccosh(np.exp(1j*phi))
 
-        self._add_hidden_unit(k, l, -2*B, 2*B)
+        self.W[k,-1] = -2*B
+        self.W[l,-1] = 2*B
         self.a[k] += B
-        self.a[l] -= B 
+        self.a[l] -= B
+        self.C += np.log(2)
 
     def CRZ(self, k, l, phi):
+
+        self.add_hidden_units(num=1)
+
         A = np.arccosh(np.exp(-1j*phi/2))
 
-        self._add_hidden_unit(k, l, -2*A, 2*A)
+        self.W[k,-1] = -2*A
+        self.W[l,-1] = 2*A
         self.a[k] += 1j*phi/2 + A
-        self.a[l] += 1j*phi/2 - A 
+        self.a[l] += 1j*phi/2 - A
+        self.C += np.log(2)
