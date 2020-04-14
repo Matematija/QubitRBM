@@ -3,10 +3,13 @@ from scipy.special import logsumexp
 
 def sigmoid(z):
 
-    em = np.exp(-z, where=z.real>=0)
-    ep = np.exp(z, where=z.real<0)
+    big = z.real >= 0
+    small = np.logical_not(big)
 
-    return np.where(z.real>=0, 1/(1+em), ep/(1+ep))
+    em = np.exp(-z, where=big)
+    ep = np.exp(z, where=small)
+
+    return np.where(big, 1/(1+em), ep/(1+ep))
 
 def log1pexp(z, keepdims=False):
     

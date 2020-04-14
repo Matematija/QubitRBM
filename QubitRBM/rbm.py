@@ -64,7 +64,7 @@ class RBM:
         if fold_imag:
             logpsi.imag = (logpsi.imag + np.pi)%(2*np.pi) - np.pi
         
-        return logpsi if B.shape[0] != 1 else logpsi.item()
+        return logpsi if logpsi.size > 1 else logpsi.item()
 
     def fold_imag_params(self):
         self.C = self.C.real + 1j*((self.C.imag + np.pi)%(2*np.pi) - np.pi)
