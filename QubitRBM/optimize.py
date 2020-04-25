@@ -15,7 +15,7 @@ try:
     import QubitRBM.utils as utils
 except Exception as error:
     print('QubitRBM folder not in PATH!')
-    raise(error)
+    raise error
 
 
 def S_matrix(grad):
@@ -23,8 +23,8 @@ def S_matrix(grad):
     term2 = np.tensordot(grad.conj().mean(axis=0), grad.mean(axis=0), axes=0)
     return term1 - term2
 
-def hadamard_optimization(rbm, n, tol=1e-6, lookback=50, psi_mcmc_params=(500, 100, 1), phi_mcmc_params=(2000, 500, 1),
-                           sigma=1e-3, resample_phi=None, lr=0.05, lr_tau=None, lr_min=0.0, eps=1e-6, fidelity='mcmc', verbose=False):
+def hadamard_optimization(rbm, n, init=None, tol=1e-6, lookback=50, psi_mcmc_params=(500, 100, 1), phi_mcmc_params=(2000, 500, 1),
+                           sigma=1e-5, resample_phi=None, lr=0.05, lr_tau=None, lr_min=0.0, eps=1e-6, fidelity='mcmc', verbose=False):
 
     """
     Implements the stochastic reconfiguration algorithm to optimize the application of one H gate on qubit n in machine 'rbm'.
@@ -45,9 +45,32 @@ def hadamard_optimization(rbm, n, tol=1e-6, lookback=50, psi_mcmc_params=(500, 1
         
     phi_samples = rbm.get_samples(n_steps=phi_gap*phi_mcmc_steps+phi_warmup+1, state='h', n=n)[phi_warmup::phi_gap]
 
-    a = rbm.a.copy() + sigma*(np.random.randn(nv) + 1j*np.random.randn(nv))
-    b = rbm.b.copy() + sigma*(np.random.randn(nh) + 1j*np.random.randn(nh))
-    W = rbm.W.copy() + sigma*(np.random.randn(nv, nh) + 1j*np.random.randn(nv, nh))
+    if init is None:
+        # a = rbm.a.copy() + sigma*(np.random.randn(nv) + 1j*np.random.randn(nv))
+        # b = rbm.b.copy() + sigma*(np.random.randn(nh) + 1j*np.random.randn(nh))
+        # W = rbm.W.copy() + sigma*(np.random.randn(nv, nh) + 1j*np.random.randn(nv, nh))
+
+        ########################################################
+
+        a, b, W = rbm.a.copy(), rbm.b.copy(), rbm.W.copy()
+
+        # r = np.random.rand()
+        r = 0.5
+        a[n] = r*(a[n] + 1j*np.pi) + (1-r)*(-a[n])
+        a += sigma*(np.random.randn(nv) + 1j*np.random.randn(nv)) 
+
+        #r = np.random.rand(nh)
+        b = r*b + (1-r)*(b + W[n,:])
+        b += sigma*(np.random.randn(nh) + 1j*np.random.randn(nh))
+
+        # r = np.random.rand(nh)
+        W[n,:] = r*W[n,:] + (1-r)*(-W[n,:])
+        W += sigma*(np.random.randn(nv, nh) + 1j*np.random.randn(nv, nh))
+
+        ########################################################
+
+    else:
+        a, b, W = init
 
     logpsi = RBM(nv, nh)
     logpsi.set_params(a=a, b=b, W=W)
@@ -61,8 +84,8 @@ def hadamard_optimization(rbm, n, tol=1e-6, lookback=50, psi_mcmc_params=(500, 1
     clock = time()
     t = 0
     
-    while (np.abs(F_mean_new - F_mean_old) > tol or t < 2*lookback + 1) and F_mean_new < 1-tol:
-    # while F_mean_new < 1 - tol or t < 2*lookback + 1:
+    # while (np.abs(F_mean_new - F_mean_old) > tol or t < 2*lookback + 1) and F_mean_new < 1-tol:
+    while (np.abs(F_mean_new - F_mean_old) > tol or t < 2*lookback + 1) and F < 0.99:
 
         t += 1
 
@@ -109,7 +132,7 @@ def hadamard_optimization(rbm, n, tol=1e-6, lookback=50, psi_mcmc_params=(500, 1
                 phi_samples = rbm.get_samples(n_steps=phi_gap*phi_mcmc_steps+phi_warmup+1, state='h', n=n)[phi_warmup::phi_gap]
 
         if time() - clock > 20 and verbose:
-            print('Iteration {} | Fidelity = {} | lr = {}'.format(t, F, lr_))
+            print('Iteration {:4d} | Fidelity = {:05.4f} | lr = {:04.3f}'.format(t, F, lr_))
             clock = time()
 
     return logpsi.a, logpsi.b, logpsi.W, history

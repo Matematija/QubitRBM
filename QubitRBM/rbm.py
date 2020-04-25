@@ -11,7 +11,7 @@ try:
     import QubitRBM.utils as utils
 except Exception as error:
     print('QubitRBM folder not in PATH!')
-    raise(error)
+    raise error
 
 class RBM:
     
