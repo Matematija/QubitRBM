@@ -3,8 +3,8 @@
 
 import numpy as np
 
-import qiskit
-from qiskit import Aer
+# import qiskit
+# from qiskit import Aer
 
 import sys, os
 
@@ -23,9 +23,9 @@ data = {}
 
 logpsi = RBM(nv, nh)
 
-qubits = qiskit.QuantumRegister(size=nv, name='q')
-circ = qiskit.QuantumCircuit(qubits)
-circ.h(qubits)
+# qubits = qiskit.QuantumRegister(size=nv, name='q')
+# circ = qiskit.QuantumCircuit(qubits)
+# circ.h(qubits)
 
 chosen_gates = []
 
@@ -40,14 +40,14 @@ for k in range(depth):
     
     if gate=='RZ':
         logpsi.RZ(*qs, phi)
-        circ.rz(phi, *qs)
+        # circ.rz(phi, *qs)
     elif gate=='RZZ':
         logpsi.RZZ(*qs, phi)
-        circ.rzz(phi, *qs)
+        # circ.rzz(phi, *qs)
     elif gate=='P':
         logpsi.P(*qs, phi)
-        circ.x(*qs)
-        circ.rz(phi, *qs)
+        # circ.x(*qs)
+        # circ.rz(phi, *qs)
 
 logpsi.fold_imag_params()
 
@@ -58,16 +58,16 @@ data['W_pre_h'] = logpsi.W.copy()
 
 ################# Qiskit exact result #################
 
-circ.h(qubits)
+# circ.h(qubits)
 
-backend = Aer.get_backend('statevector_simulator')
+# backend = Aer.get_backend('statevector_simulator')
 
-job = qiskit.execute(circ, backend)
-result = job.result()
-psi_exact = result.get_statevector(circ, decimals=50)
+# job = qiskit.execute(circ, backend)
+# result = job.result()
+# psi_exact = result.get_statevector(circ, decimals=50)
 
-p_exact = np.abs(psi_exact)**2
-print('Qiskit probability sum check: {}'.format(p_exact.sum()))
+# p_exact = np.abs(psi_exact)**2
+# print('Qiskit probability sum check: {}'.format(p_exact.sum()))
 
 ################# Hadamard transform #################
 
