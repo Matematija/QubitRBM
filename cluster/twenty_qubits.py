@@ -96,7 +96,7 @@ for n in range(nv):
     
     while True:
 
-        a, b, W, Fs = hadamard_optimization(logpsi, n, tol=tol, lr=lr, lr_tau=lr_tau, lr_min=lr_min,
+        a, b, W, Fs = hadamard_optimization(logpsi, n, parallel=True, tol=tol, lr=lr, lr_tau=lr_tau, lr_min=lr_min,
                                            lookback=50, resample_phi=None, sigma=0.0, fidelity='mcmc',
                                            psi_mcmc_params=(50000,2000,1), phi_mcmc_params=(50000,2000,1),
                                            eps=1e-6, verbose=True)
