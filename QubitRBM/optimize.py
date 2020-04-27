@@ -1,21 +1,18 @@
 import numpy as np
 from scipy.linalg import solve
-from scipy.special import logsumexp
 
+from joblib import Parallel, delayed
 from time import time
-
 import os, sys
+
 libpath = os.path.abspath('..')
 if libpath not in sys.path:
     sys.path.append(libpath)
 
-try:
-    from QubitRBM.rbm import RBM
-    import QubitRBM.exact_gates as eg
-    import QubitRBM.utils as utils
-except Exception as error:
-    print('QubitRBM folder not in PATH!')
-    raise error
+from QubitRBM.rbm import RBM
+import QubitRBM.exact_gates as eg
+import QubitRBM.utils as utils
+from QubitRBM.utils import logsumexp
 
 
 def S_matrix(grad):
@@ -23,7 +20,7 @@ def S_matrix(grad):
     term2 = np.tensordot(grad.conj().mean(axis=0), grad.mean(axis=0), axes=0)
     return term1 - term2
 
-def hadamard_optimization(rbm, n, init=None, tol=1e-6, lookback=50, psi_mcmc_params=(500, 100, 1), phi_mcmc_params=(2000, 500, 1),
+def hadamard_optimization(rbm, n, init=None, parallel=False, tol=1e-6, lookback=50, psi_mcmc_params=(500, 100, 1), phi_mcmc_params=(2000, 500, 1),
                            sigma=1e-5, resample_phi=None, lr=0.05, lr_tau=None, lr_min=0.0, eps=1e-6, fidelity='mcmc', verbose=False):
 
     """
@@ -42,8 +39,11 @@ def hadamard_optimization(rbm, n, init=None, tol=1e-6, lookback=50, psi_mcmc_par
         pass
     else:
         raise KeyError('Invalid fidelity calculation mode. Expected "exact" or "mcmc", got {}'.format(fidelity))
-        
-    phi_samples = rbm.get_samples(n_steps=phi_gap*phi_mcmc_steps+phi_warmup+1, state='h', n=n)[phi_warmup::phi_gap]
+    
+    if not parallel:
+       phi_samples = rbm.get_samples(n_steps=phi_gap*phi_mcmc_steps+phi_warmup+1, state='h', n=n)[phi_warmup::phi_gap]
+    else:
+       phi_samples = rbm.parallel_get_samples(n_steps=phi_gap*phi_mcmc_steps+phi_warmup+1, state='h', n=n)[phi_warmup::phi_gap]
 
     if init is None:
         # a = rbm.a.copy() + sigma*(np.random.randn(nv) + 1j*np.random.randn(nv))
@@ -75,6 +75,8 @@ def hadamard_optimization(rbm, n, init=None, tol=1e-6, lookback=50, psi_mcmc_par
     logpsi = RBM(nv, nh)
     logpsi.set_params(a=a, b=b, W=W)
     params = utils.pack_params(a, b, W)
+
+    phiphi = rbm.eval_H(n, phi_samples)
     
     history = []
     F = 0
@@ -89,7 +91,10 @@ def hadamard_optimization(rbm, n, init=None, tol=1e-6, lookback=50, psi_mcmc_par
 
         t += 1
 
-        psi_samples = logpsi.get_samples(n_steps=psi_gap*psi_mcmc_steps+psi_warmup+1)[psi_warmup::psi_gap]
+        if parallel:
+            psi_samples = logpsi.parallel_get_samples(n_steps=psi_gap*psi_mcmc_steps+psi_warmup+1)[psi_warmup::psi_gap] 
+        else:
+            psi_samples = logpsi.get_samples(n_steps=psi_gap*psi_mcmc_steps+psi_warmup+1)[psi_warmup::psi_gap]
 
         phipsi = rbm.eval_H(n, psi_samples)
         psipsi = logpsi(psi_samples)
@@ -99,7 +104,6 @@ def hadamard_optimization(rbm, n, init=None, tol=1e-6, lookback=50, psi_mcmc_par
             F = utils.exact_fidelity(psi_vec, target_state)
         elif fidelity == 'mcmc':
             psiphi = logpsi(phi_samples)
-            phiphi = rbm.eval_H(n, phi_samples)
             F = utils.mcmc_fidelity(psipsi, psiphi, phipsi, phiphi)
 
         history.append(F)
@@ -129,7 +133,13 @@ def hadamard_optimization(rbm, n, init=None, tol=1e-6, lookback=50, psi_mcmc_par
         
         if resample_phi is not None:
             if t%resample_phi == 0:
-                phi_samples = rbm.get_samples(n_steps=phi_gap*phi_mcmc_steps+phi_warmup+1, state='h', n=n)[phi_warmup::phi_gap]
+
+                if parallel:
+                   phi_samples = rbm.parallel_get_samples(n_steps=phi_gap*phi_mcmc_steps+phi_warmup+1, state='h', n=n)[phi_warmup::phi_gap]
+                else:
+                   phi_samples = rbm.parallel_get_samples(n_steps=phi_gap*phi_mcmc_steps+phi_warmup+1, state='h', n=n)[phi_warmup::phi_gap] 
+                
+                phiphi = rbm.eval_H(n, phi_samples)
 
         if time() - clock > 20 and verbose:
             print('Iteration {:4d} | Fidelity = {:05.4f} | lr = {:04.3f}'.format(t, F, lr_))

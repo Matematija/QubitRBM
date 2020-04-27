@@ -1,17 +1,13 @@
 import numpy as np
-from scipy.special import logsumexp
 from scipy import sparse
-
+from joblib import Parallel, delayed
 import os, sys
+
 libpath = os.path.abspath('..')
 if libpath not in sys.path:
     sys.path.append(libpath)
 
-try:
-    import QubitRBM.utils as utils
-except Exception as error:
-    print('QubitRBM folder not in PATH!')
-    raise error
+import QubitRBM.utils as utils
 
 class RBM:
     
@@ -54,7 +50,7 @@ class RBM:
         Evaluates the natural logarithm of the unnormalized wavefunction.
         """
         
-        B = configs.reshape([-1, self.nv]).astype(np.bool)
+        B = np.atleast_2d(configs).astype(np.bool)
         
         term_1 = np.matmul(B, self.a)
         term_2 = utils.log1pexp(self.b + np.matmul(B, self.W)).sum(axis=1)
@@ -65,32 +61,25 @@ class RBM:
             logpsi.imag = (logpsi.imag + np.pi)%(2*np.pi) - np.pi
         
         return logpsi if logpsi.size > 1 else logpsi.item()
-
+            
     def fold_imag_params(self):
-        self.C = self.C.real + 1j*((self.C.imag + np.pi)%(2*np.pi) - np.pi)
-        self.a.imag[np.abs(self.a.imag) > np.pi] = (self.a.imag[np.abs(self.a.imag) > np.pi]  + np.pi)%(2*np.pi) - np.pi
-        self.b.imag[np.abs(self.b.imag) > np.pi] = (self.b.imag[np.abs(self.b.imag) > np.pi]  + np.pi)%(2*np.pi) - np.pi
-        self.W.imag[np.abs(self.W.imag) > np.pi] = (self.W.imag[np.abs(self.W.imag) > np.pi]  + np.pi)%(2*np.pi) - np.pi
+        self.C = utils.fold_imag(self.C)
+        self.a = utils.fold_imag(self.a)
+        self.b = utils.fold_imag(self.b)
+        self.W = utils.fold_imag(self.W)
     
-    def mcmc_iter(self, n_steps, init=None, state=None, n=None, verbose=False):
+    def get_samples(self, n_steps, init=None, state=None, n=None, verbose=False):
         
         if state is None:
             logp = lambda x: 2*self(x).real
-            
-        elif isinstance(state, str):
-            assert isinstance(n, int), 'n has to be an int!'
-            
-            if state.lower()[0] == 'h':
-                logp = lambda x: 2*self.eval_H(n, x).real
-            elif state.lower()[0] == 'x':
-                logp = lambda x: 2*self.eval_X(n, x).real
-            elif state.lower()[0] == 'z':
-                logp = lambda x: 2*self.eval_Z(n, x).real
-            else:
-                raise KeyError('State {} not recognized.'.format(state))
-                
+        elif state.lower() == 'h':
+            logp = lambda x: 2*self.eval_H(n, x).real
+        elif state.lower() == 'x':
+            logp = lambda x: 2*self.eval_X(n, x).real
+        elif state.lower() == 'z':
+            logp = lambda x: 2*self.eval_Z(n, x).real
         else:
-            raise TypeError('State has to be a string, {} given,'.format(type(state)))
+            raise KeyError('State {} not recognized.'.format(state))
         
         if init is None:
             previous = np.random.rand(self.nv) < 0.5
@@ -99,9 +88,10 @@ class RBM:
 
         log_prob_old = logp(previous)
         
+        samples = np.zeros(shape=[n_steps, self.nv], dtype=np.bool)
         accept_counter = 0
         
-        for t in range(1, n_steps):
+        for t in range(n_steps):
             
             i = np.random.randint(low=0, high=self.nv)
             
@@ -117,15 +107,29 @@ class RBM:
                 log_prob_old = log_prob_new
                 accept_counter += 1
                 
-                yield proposal
+                samples[t] = proposal
             else:
-                yield previous
+                samples[t] = previous
         
         if verbose:
             print("Acceptance ratio: ", accept_counter/(n_steps-1))
             
-    def get_samples(self, *mcmc_args, **mcmc_kwargs):
-        return np.stack(list(self.mcmc_iter(*mcmc_args, **mcmc_kwargs)))
+        return samples
+            
+    def parallel_get_samples(self, n_steps, *args, **kwargs):
+        
+        n_jobs = os.cpu_count()
+        N = n_steps//n_jobs
+        R = n_steps%n_jobs
+        
+        sample_arr = Parallel(n_jobs=n_jobs)(delayed(self.get_samples)(N, *args, **kwargs) for _ in range(n_jobs))
+        res = np.concatenate(sample_arr, axis=0)
+        
+        if R==0:
+            return res
+        else:
+            extra = self.get_samples(N, *args, **kwargs)
+            return np.concatenate([res, extra], axis=0)
     
     def grad_log(self, configs):
         
@@ -151,14 +155,14 @@ class RBM:
         if not normalized:
             return logpsis
         else:
-            logZ = logsumexp(2*logpsis.real)
+            logZ = utils.logsumexp(2*logpsis.real)
             return np.exp(logpsis - 0.5*logZ, dtype=np.complex)
         
     def get_lognorm(self, method='mcmc', samples=None, **mcmc_kwargs):
 
         if method == 'exact':
             logpsis = np.fromiter(map(self, self.hilbert_iter()), dtype=np.complex, count=2**self.nv)
-            return logsumexp(2*logpsis.real)
+            return utils.logsumexp(2*logpsis.real)
 
         elif method == 'mcmc':
             
@@ -166,7 +170,7 @@ class RBM:
                 samples = self.get_samples(**mcmc_kwargs)
 
             logpsis = self(samples)
-            return logsumexp(2*logpsis.real)
+            return utils.logsumexp(2*logpsis.real)
 
         else:
             raise KeyError('Wrong "method". Expected "mcmc" or "exact", got {}'.format(method))
@@ -203,7 +207,8 @@ class RBM:
         return CZ + term_1 + term_2
     
     def eval_H(self, n, configs):
-        return logsumexp([self.eval_X(n, configs), self.eval_Z(n, configs)], axis=0) - np.log(2)/2
+        xz_vals = np.stack([self.eval_X(n, configs), self.eval_Z(n, configs)], axis=1)
+        return utils.logsumexp(xz_vals, axis=1) - np.log(2)/2
 
     def X(self, n):
         """
@@ -242,9 +247,9 @@ class RBM:
     def add_hidden_units(self, num, b_=None, W_=None):
 
         if b_ is None: 
-           b_ = np.zeros(shape=[num], dtype=np.complex) 
+            b_ = np.zeros(shape=[num], dtype=np.complex) 
         if W_ is None:
-           W_ = np.zeros(shape=[self.nv, num], dtype=np.complex)
+            W_ = np.zeros(shape=[self.nv, num], dtype=np.complex)
 
         b = np.zeros(shape=[self.nh+num], dtype=np.complex)
         W = np.zeros(shape=[self.nv, self.nh+num], dtype=np.complex)
