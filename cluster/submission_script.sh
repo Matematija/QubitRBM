@@ -14,7 +14,7 @@ cd ..
 virtualenv venv
 source venv/bin/activate
 
-pip3 install numpy, scipy
+pip3 install numpy scipy
 pip3 install joblib
 
 pip3 freeze
