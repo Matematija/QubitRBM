@@ -14,14 +14,12 @@ cd ..
 virtualenv venv
 source venv/bin/activate
 
-pip3 install numpy scipy
-pip3 install joblib
-
+pip3 install numpy scipy joblib
 pip3 freeze
 
 cd cluster
-
 python3 twenty_qubits.py
+cd ..
 
 deactivate
 
