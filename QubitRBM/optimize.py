@@ -41,9 +41,9 @@ def hadamard_optimization(rbm, n, init=None, parallel=False, tol=1e-6, lookback=
         raise KeyError('Invalid fidelity calculation mode. Expected "exact" or "mcmc", got {}'.format(fidelity))
     
     if not parallel:
-       phi_samples = rbm.get_samples(n_steps=phi_gap*phi_mcmc_steps+phi_warmup+1, state='h', n=n)[phi_warmup::phi_gap]
+       phi_samples = rbm.get_samples(n_steps=phi_mcmc_steps, warmup=phi_warmup, step=phi_gap, state='h', n=n)
     else:
-       phi_samples = rbm.parallel_get_samples(n_steps=phi_gap*phi_mcmc_steps+phi_warmup+1, state='h', n=n)[phi_warmup::phi_gap]
+       phi_samples = rbm.parallel_get_samples(n_steps=phi_mcmc_steps, warmup=phi_warmup, step=phi_gap, state='h', n=n)
 
     if init is None:
         # a = rbm.a.copy() + sigma*(np.random.randn(nv) + 1j*np.random.randn(nv))
@@ -92,9 +92,9 @@ def hadamard_optimization(rbm, n, init=None, parallel=False, tol=1e-6, lookback=
         t += 1
 
         if parallel:
-            psi_samples = logpsi.parallel_get_samples(n_steps=psi_gap*psi_mcmc_steps+psi_warmup+1)[psi_warmup::psi_gap] 
+            psi_samples = logpsi.parallel_get_samples(n_steps=psi_mcmc_steps, warmup=psi_warmup, step=psi_gap) 
         else:
-            psi_samples = logpsi.get_samples(n_steps=psi_gap*psi_mcmc_steps+psi_warmup+1)[psi_warmup::psi_gap]
+            psi_samples = logpsi.get_samples(n_steps=psi_mcmc_steps, warmup=psi_warmup, step=psi_gap)
 
         phipsi = rbm.eval_H(n, psi_samples)
         psipsi = logpsi(psi_samples)
@@ -135,9 +135,9 @@ def hadamard_optimization(rbm, n, init=None, parallel=False, tol=1e-6, lookback=
             if t%resample_phi == 0:
 
                 if parallel:
-                   phi_samples = rbm.parallel_get_samples(n_steps=phi_gap*phi_mcmc_steps+phi_warmup+1, state='h', n=n)[phi_warmup::phi_gap]
+                   phi_samples = rbm.parallel_get_samples(n_steps=phi_mcmc_steps, warmup=phi_warmup, step=phi_gap, state='h', n=n)
                 else:
-                   phi_samples = rbm.parallel_get_samples(n_steps=phi_gap*phi_mcmc_steps+phi_warmup+1, state='h', n=n)[phi_warmup::phi_gap] 
+                   phi_samples = rbm.parallel_get_samples(n_steps=phi_mcmc_steps, warmup=phi_warmup, step=phi_gap, state='h', n=n)
                 
                 phiphi = rbm.eval_H(n, phi_samples)
 

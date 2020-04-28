@@ -68,7 +68,7 @@ class RBM:
         self.b = utils.fold_imag(self.b)
         self.W = utils.fold_imag(self.W)
     
-    def get_samples(self, n_steps, init=None, state=None, n=None, verbose=False):
+    def get_samples(self, n_steps, init=None, state=None, n=None, warmup=0, step=1, verbose=False):
         
         if state is None:
             logp = lambda x: 2*self(x).real
@@ -91,7 +91,7 @@ class RBM:
         samples = np.zeros(shape=[n_steps, self.nv], dtype=np.bool)
         accept_counter = 0
         
-        for t in range(n_steps):
+        for t in range(warmup + step*n_steps):
             
             i = np.random.randint(low=0, high=self.nv)
             
@@ -114,7 +114,7 @@ class RBM:
         if verbose:
             print("Acceptance ratio: ", accept_counter/(n_steps-1))
             
-        return samples
+        return samples[warmup::step]
             
     def parallel_get_samples(self, n_steps, *args, **kwargs):
         

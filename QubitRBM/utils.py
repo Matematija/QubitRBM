@@ -4,10 +4,9 @@ def logsumexp(arr, axis=None):
     m = np.max(arr, axis=axis, keepdims=True)
     return m.squeeze() + np.log(np.exp(arr - m).sum(axis=axis))
 
-def logmeanexp(arr, axis=None, keepdims=False):
+def logmeanexp(arr, axis=None):
     m = np.max(arr, axis=axis, keepdims=True)
-    res = m + np.log(np.exp(arr - m).mean(axis=axis, keepdims=True))
-    return res.squeeze() if not keepdims else res
+    return m + np.log(np.exp(arr - m).mean(axis=axis))
 
 def sigmoid(z):
 
