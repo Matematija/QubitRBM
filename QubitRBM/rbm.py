@@ -68,25 +68,14 @@ class RBM:
         self.b = utils.fold_imag(self.b)
         self.W = utils.fold_imag(self.W)
     
-    def get_samples(self, n_steps, init=None, state=None, n=None, warmup=0, step=1, verbose=False):
-        
-        if state is None:
-            logp = lambda x: 2*self(x).real
-        elif state.lower() == 'h':
-            logp = lambda x: 2*self.eval_H(n, x).real
-        elif state.lower() == 'x':
-            logp = lambda x: 2*self.eval_X(n, x).real
-        elif state.lower() == 'z':
-            logp = lambda x: 2*self.eval_Z(n, x).real
-        else:
-            raise KeyError('State {} not recognized.'.format(state))
+    def get_samples(self, n_steps, init=None, warmup=0, step=1, verbose=False):
         
         if init is None:
             previous = np.random.rand(self.nv) < 0.5
         else:
             previous = init
 
-        log_prob_old = logp(previous)
+        log_prob_old = 2*self(previous).real
         
         samples = np.zeros(shape=[warmup + step*n_steps, self.nv], dtype=np.bool)
         accept_counter = 0
@@ -98,7 +87,44 @@ class RBM:
             proposal = previous.copy()
             proposal[i] = not proposal[i]
             
-            log_prob_new = logp(proposal)
+            log_prob_new = 2*self(proposal).real
+            
+            logA = log_prob_new - log_prob_old
+            
+            if logA >= np.log(np.random.rand()):
+                previous = proposal.copy()
+                log_prob_old = log_prob_new
+                accept_counter += 1 if t > warmup else 0
+                
+                samples[t] = proposal
+            else:
+                samples[t] = previous
+        
+        if verbose:
+            print("Acceptance ratio: ", accept_counter/(n_steps-1))
+            
+        return samples[warmup::step]
+
+    def get_H_samples(self, n, n_steps, init=None, warmup=0, step=1, verbose=False):
+        
+        if init is None:
+            previous = np.random.rand(self.nv) < 0.5
+        else:
+            previous = init
+
+        log_prob_old = 2*self.eval_H(n, previous).real
+        
+        samples = np.zeros(shape=[warmup + step*n_steps, self.nv], dtype=np.bool)
+        accept_counter = 0
+        
+        for t in range(samples.shape[0]):
+            
+            i = np.random.randint(low=0, high=self.nv)
+            
+            proposal = previous.copy()
+            proposal[i] = not proposal[i]
+            
+            log_prob_new = 2*self.eval_H(n, proposal).real
             
             logA = log_prob_new - log_prob_old
             

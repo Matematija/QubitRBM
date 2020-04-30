@@ -19,7 +19,9 @@ nh = 1 # to start off with, we can add more later
 
 if r == 0:
 
+    print('Numpy config:\n')
     np.__config__.show()
+    print('\n')
 
     logpsi = RBM(nv, nh)
 
@@ -38,11 +40,11 @@ if r == 0:
         phi = np.random.uniform(low=-np.pi, high=np.pi)
         
         if gate=='RZ':
-            logpsi.RZ(*qs, phi)
+            logpsi.RZ(*qs, phi=phi)
         elif gate=='RZZ':
-            logpsi.RZZ(*qs, phi)
+            logpsi.RZZ(*qs, phi=phi)
         elif gate=='P':
-            logpsi.P(*qs, phi)
+            logpsi.P(*qs, phi=phi)
 
     logpsi.fold_imag_params()
 
@@ -74,7 +76,7 @@ lr_tau = None
 lr_min = lrf
 
 tol = 1e-5
-add_units = 1
+add_units = 2
 
 for n in range(nv):
     
@@ -85,7 +87,7 @@ for n in range(nv):
 
         a, b, W, Fs = parallel_hadamard_optimization(logpsi, comm, n, tol=tol, lr=lr, lr_tau=lr_tau, lr_min=lr_min,
                                                         lookback=50, resample_phi=None, sigma=0.0,
-                                                        psi_mcmc_params=(40000,50,1), phi_mcmc_params=(40000,50,1),
+                                                        psi_mcmc_params=(8000,500,1), phi_mcmc_params=(8000,500,1),
                                                         eps=1e-6, verbose=True)
         
         if Fs[-1] > 0.92:

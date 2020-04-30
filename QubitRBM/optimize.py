@@ -174,7 +174,7 @@ def parallel_hadamard_optimization(rbm, comm, n, init=None, tol=1e-6, lookback=5
     logpsi.set_params(a=a, b=b, W=W)
     params = utils.pack_params(a, b, W)
 
-    phi_samples = rbm.get_samples(n_steps=phi_mcmc_steps//p, state='h', n=n, warmup=phi_warmup, step=phi_gap)
+    phi_samples = rbm.get_H_samples(n=n, n_steps=phi_mcmc_steps//p, warmup=phi_warmup, step=phi_gap)
     phiphi_local = rbm.eval_H(n, phi_samples)
     
     history = []
@@ -211,8 +211,6 @@ def parallel_hadamard_optimization(rbm, comm, n, init=None, tol=1e-6, lookback=5
         if r==0:
             logF = logsumexp(F1) + logsumexp(F2) - np.log(phi_mcmc_steps) - np.log(psi_mcmc_steps)
             F = np.exp(logF).real
-
-            history.append(F)
 
             if t > 2*lookback:
                 F_mean_old = F_mean_new
@@ -264,17 +262,15 @@ def parallel_hadamard_optimization(rbm, comm, n, init=None, tol=1e-6, lookback=5
         F_mean_old = F_mean_new
         F_mean_new = comm.bcast(F_mean_new, root=0)
         F = comm.bcast(F, root=0)
+        history.append(F)
 
         comm.Bcast(params, root=0)
         logpsi.a, logpsi.b, logpsi.W = utils.unpack_params(params, nv, nh)
         
         if resample_phi is not None:
             if t%resample_phi == 0:
-
-                phi_samples = rbm.parallel_get_samples(comm=comm, n_steps=phi_mcmc_steps, warmup=phi_warmup, step=phi_gap, state='h', n=n)
-
-                if r==0:
-                    phiphi = rbm.eval_H(n, phi_samples)
+                phi_samples = rbm.get_H_samples(n=n, n_steps=phi_mcmc_steps//p, warmup=phi_warmup, step=phi_gap)
+                phiphi_local = rbm.eval_H(n, phi_samples)
 
         if r==0 and time() - clock > 20 and verbose:
             print('Iteration {:4d} | Fidelity = {:05.4f} | lr = {:04.3f}'.format(t, F, lr_))
