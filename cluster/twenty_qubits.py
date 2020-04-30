@@ -53,11 +53,11 @@ if r == 0:
 
     print("Ratio nh/nv: ", logpsi.nh/logpsi.nv)
 
-    r = 8
+    ratio = 8
 
-    if logpsi.nh/logpsi.nv < r:
-        print("Ratio nh/nv too low, adding to get to {}".format(r))
-        logpsi.add_hidden_units(r*logpsi.nv - logpsi.nh)
+    if logpsi.nh/logpsi.nv < ratio:
+        print("Ratio nh/nv too low, adding to get to {}".format(ratio))
+        logpsi.add_hidden_units(ratio*logpsi.nv - logpsi.nh)
 
 else:
     logpsi = None
@@ -85,7 +85,7 @@ for n in range(nv):
 
         a, b, W, Fs = parallel_hadamard_optimization(logpsi, comm, n, tol=tol, lr=lr, lr_tau=lr_tau, lr_min=lr_min,
                                                         lookback=50, resample_phi=None, sigma=0.0,
-                                                        psi_mcmc_params=(10000,50,1), phi_mcmc_params=(10000,50,1),
+                                                        psi_mcmc_params=(40000,50,1), phi_mcmc_params=(40000,50,1),
                                                         eps=1e-6, verbose=True)
         
         if Fs[-1] > 0.92:
@@ -97,10 +97,12 @@ for n in range(nv):
 
             break
         else:
-            print('||Repeating optimization, adding {} hidden units||'.format(add_units))
+            if r==0:
+                print('||Repeating optimization, adding {} hidden units||'.format(add_units))
             logpsi.add_hidden_units(add_units)
-    
-    print('\nQubit {} done! Final fidelity estimate: {:05.4f}'.format(n+1, Fs[-1]))
+
+    if r==0:
+        print('\nQubit {} done! Final fidelity estimate: {:05.4f}'.format(n+1, Fs[-1]))
 
 if r==0:
     data['a_final'] = a
