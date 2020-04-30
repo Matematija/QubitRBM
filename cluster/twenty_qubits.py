@@ -85,9 +85,14 @@ for n in range(nv):
     
     while True:
 
-        a, b, W, Fs = parallel_hadamard_optimization(logpsi, comm, n, tol=tol, lr=lr, lr_tau=lr_tau, lr_min=lr_min,
+        # a, b, W, Fs = parallel_hadamard_optimization(logpsi, comm, n, tol=tol, lr=lr, lr_tau=lr_tau, lr_min=lr_min,
+        #                                                 lookback=50, resample_phi=None, sigma=0.0,
+        #                                                 psi_mcmc_params=(20000,50,1), phi_mcmc_params=(20000,50,1),
+        #                                                 eps=1e-6, verbose=True)
+
+        a, b, W, Fs = parallel_hadamard_optimization_2(logpsi, comm, n, tol=tol, lr=lr,
                                                         lookback=50, resample_phi=None, sigma=0.0,
-                                                        psi_mcmc_params=(8000,500,1), phi_mcmc_params=(8000,500,1),
+                                                        psi_mcmc_params=(2000,100,10), phi_mcmc_params=(2000,100,10),
                                                         eps=1e-6, verbose=True)
         
         if Fs[-1] > 0.92:
