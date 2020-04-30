@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import sparse
-from joblib import Parallel, delayed
+from scipy.special import logsumexp
 import os, sys
 
 libpath = os.path.abspath('..')
@@ -11,7 +11,7 @@ import QubitRBM.utils as utils
 
 class RBM:
     
-    def __init__(self, n_visible, n_hidden=0):
+    def __init__(self, n_visible, n_hidden=1):
         
         self.nv = n_visible
         self.nh = n_hidden
@@ -53,7 +53,7 @@ class RBM:
         B = np.atleast_2d(configs).astype(np.bool)
         
         term_1 = np.matmul(B, self.a)
-        term_2 = utils.log1pexp(self.b + np.matmul(B, self.W)).sum(axis=1)
+        term_2 = utils.log1pexp(self.b.reshape(1,-1) + np.matmul(B, self.W)).sum(axis=1)
         
         logpsi = self.C + term_1 + term_2
 
@@ -88,10 +88,10 @@ class RBM:
 
         log_prob_old = logp(previous)
         
-        samples = np.zeros(shape=[n_steps, self.nv], dtype=np.bool)
+        samples = np.zeros(shape=[warmup + step*n_steps, self.nv], dtype=np.bool)
         accept_counter = 0
         
-        for t in range(warmup + step*n_steps):
+        for t in range(samples.shape[0]):
             
             i = np.random.randint(low=0, high=self.nv)
             
@@ -105,7 +105,7 @@ class RBM:
             if logA >= np.log(np.random.rand()):
                 previous = proposal.copy()
                 log_prob_old = log_prob_new
-                accept_counter += 1
+                accept_counter += 1 if t > warmup else 0
                 
                 samples[t] = proposal
             else:
@@ -116,24 +116,32 @@ class RBM:
             
         return samples[warmup::step]
             
-    def parallel_get_samples(self, n_steps, *args, **kwargs):
+    # def parallel_get_samples(self, comm, n_steps, *args, **kwargs):
+
+    #     # This assumes that n_steps is divisible by the number of processes.
         
-        n_jobs = os.cpu_count()
-        N = n_steps//n_jobs
-        R = n_steps%n_jobs
+    #     r = comm.Get_rank()
+    #     p = comm.Get_size()
         
-        sample_arr = Parallel(n_jobs=n_jobs)(delayed(self.get_samples)(N, *args, **kwargs) for _ in range(n_jobs))
-        res = np.concatenate(sample_arr, axis=0)
-        
-        if R==0:
-            return res
-        else:
-            extra = self.get_samples(N, *args, **kwargs)
-            return np.concatenate([res, extra], axis=0)
+    #     l = n_steps//p
+    #     extra = n_steps%p
+
+    #     samples = self.get_samples(l, *args, **kwargs)
+    #     samples = comm.gather(samples, root=0)
+
+    #     if r == 0:
+            
+    #         res = np.concatenate(samples, axis=0)
+
+    #         if extra == 0:
+    #             return res
+    #         else:
+    #             extra_samples = self.get_samples(extra, *args, **kwargs)
+    #             return np.concatenate([res, extra_samples])
     
     def grad_log(self, configs):
         
-        B = configs.reshape([-1, self.nv]).astype(np.bool)
+        B = np.atleast_2d(configs).astype(np.bool)
         
         ga = configs.copy().astype(np.complex)
         gb = utils.sigmoid(self.b + np.matmul(B, self.W))
@@ -155,14 +163,14 @@ class RBM:
         if not normalized:
             return logpsis
         else:
-            logZ = utils.logsumexp(2*logpsis.real)
+            logZ = logsumexp(2*logpsis.real)
             return np.exp(logpsis - 0.5*logZ, dtype=np.complex)
         
     def get_lognorm(self, method='mcmc', samples=None, **mcmc_kwargs):
 
         if method == 'exact':
             logpsis = np.fromiter(map(self, self.hilbert_iter()), dtype=np.complex, count=2**self.nv)
-            return utils.logsumexp(2*logpsis.real)
+            return logsumexp(2*logpsis.real)
 
         elif method == 'mcmc':
             
@@ -170,7 +178,7 @@ class RBM:
                 samples = self.get_samples(**mcmc_kwargs)
 
             logpsis = self(samples)
-            return utils.logsumexp(2*logpsis.real)
+            return logsumexp(2*logpsis.real)
 
         else:
             raise KeyError('Wrong "method". Expected "mcmc" or "exact", got {}'.format(method))
@@ -208,7 +216,7 @@ class RBM:
     
     def eval_H(self, n, configs):
         xz_vals = np.stack([self.eval_X(n, configs), self.eval_Z(n, configs)], axis=1)
-        return utils.logsumexp(xz_vals, axis=1) - np.log(2)/2
+        return logsumexp(xz_vals, axis=1) - np.log(2)/2
 
     def X(self, n):
         """

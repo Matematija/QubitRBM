@@ -1,12 +1,5 @@
 import numpy as np
-
-def logsumexp(arr, axis=None):
-    m = np.max(arr, axis=axis, keepdims=True)
-    return m.squeeze() + np.log(np.exp(arr - m).sum(axis=axis))
-
-def logmeanexp(arr, axis=None):
-    m = np.max(arr, axis=axis, keepdims=True)
-    return m + np.log(np.exp(arr - m).mean(axis=axis))
+from scipy.special import logsumexp
 
 def sigmoid(z):
 
@@ -48,7 +41,7 @@ def exact_fidelity(psi, phi):
     return np.abs(np.vdot(psi, phi))**2
 
 def mcmc_fidelity(psipsi, psiphi, phipsi, phiphi):
-    term_1 = logmeanexp(phipsi - psipsi)
-    term_2 = logmeanexp(psiphi - phiphi)
+    term_1 = logsumexp(phipsi - psipsi) - np.log(phipsi.shape[0])
+    term_2 = logsumexp(psiphi - phiphi) - np.log(psiphi.shape[0])
 
     return np.exp(term_1 + term_2).real
