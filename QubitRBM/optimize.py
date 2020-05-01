@@ -13,13 +13,9 @@ from QubitRBM.rbm import RBM
 import QubitRBM.exact_gates as eg
 import QubitRBM.utils as utils
 
-def S_matrix(grad):
-    term1 = np.matmul(grad.conj().T, grad)/grad.shape[0]
-
-    grad_mean = grad.mean(axis=0)
-    term2 = np.tensordot(grad_mean.conj(), grad_mean, axes=0)
-
-    return term1 - term2
+def S_matrix(O):
+    O_centered = O - O.mean(axis=0, keepdims=True)
+    return np.matmul(O_centered.T.conj(), O_centered)/O.shape[0]
 
 def hadamard_optimization(rbm, n, init=None, comm=None, tol=1e-6, lookback=50, psi_mcmc_params=(500, 100, 1), phi_mcmc_params=(2000, 500, 1),
                            sigma=1e-5, resample_phi=None, lr=0.05, lr_tau=None, lr_min=0.0, eps=1e-6, fidelity='mcmc', verbose=False):
@@ -145,13 +141,12 @@ def parallel_hadamard_optimization(rbm, comm, n, init=None, tol=1e-6, lookback=5
     phi_mcmc_steps, phi_warmup, phi_gap = phi_mcmc_params
     nv, nh = rbm.nv, rbm.nh
     
-    # phi_samples = rbm.parallel_get_samples(comm=comm, n_steps=phi_mcmc_steps, warmup=phi_warmup, step=phi_gap, state='h', n=n) # phi_samples only present on root process, None on rest
-
     if r==0:
+
         if init is None:
             a, b, W = rbm.a.copy(), rbm.b.copy(), rbm.W.copy()
 
-            l = 0.5
+            l = 1.0
             a[n] = l*(a[n] + 1j*np.pi) + (1-l)*(-a[n])
             a += sigma*(np.random.randn(nv) + 1j*np.random.randn(nv)) 
             b = l*b + (1-l)*(b + W[n,:])
@@ -160,18 +155,16 @@ def parallel_hadamard_optimization(rbm, comm, n, init=None, tol=1e-6, lookback=5
             W += sigma*(np.random.randn(nv, nh) + 1j*np.random.randn(nv, nh))
         else:
             a, b, W = init
+
+        logpsi = RBM(nv, nh)
+        logpsi.set_params(a=a, b=b, W=W)
+        
     else:
-        a = np.empty(shape=[nv], dtype=np.complex)
-        b = np.empty(shape=[nh], dtype=np.complex)
-        W = np.empty(shape=[nv, nh], dtype=np.complex)
+        logpsi = None
 
-    comm.Bcast(a, root=0)
-    comm.Bcast(b, root=0)
-    comm.Bcast(W, root=0)
+    logpsi = comm.bcast(logpsi, root=0)
 
-    logpsi = RBM(nv, nh)
-    logpsi.set_params(a=a, b=b, W=W)
-    params = utils.pack_params(a, b, W)
+    params = utils.pack_params(logpsi.a, logpsi.b, logpsi.W)
 
     phi_samples = rbm.get_H_samples(n=n, n_steps=phi_mcmc_steps//p, warmup=phi_warmup, step=phi_gap)
     phiphi_local = rbm.eval_H(n, phi_samples)
@@ -198,6 +191,8 @@ def parallel_hadamard_optimization(rbm, comm, n, init=None, tol=1e-6, lookback=5
         F_term_1_local = logsumexp(phipsi_local - psipsi_local)
         F_term_2_local = logsumexp(psiphi_local - phiphi_local)
 
+        ### Gathering the data for fidelity estimate
+
         if r==0:
             F1 = np.empty(shape=[p], dtype=np.complex)
             F2 = np.empty(shape=[p], dtype=np.complex)
@@ -210,25 +205,23 @@ def parallel_hadamard_optimization(rbm, comm, n, init=None, tol=1e-6, lookback=5
         if r==0:
             logF = logsumexp(F1) + logsumexp(F2) - np.log(phi_mcmc_steps) - np.log(psi_mcmc_steps)
             F = np.exp(logF).real
-
-            if t > 2*lookback:
-                F_mean_old = F_mean_new
-                F_mean_new = sum(history[-lookback:])/lookback
+        
+        #######################################################
 
         gas_local, gbs_local, gWs_local = logpsi.grad_log(psi_samples)
         O_local = np.concatenate([gas_local, gbs_local, gWs_local.reshape(-1, nv*nh)], axis=1)
 
         ratio_psi_local = np.exp(phipsi_local - psipsi_local)
 
+        ### Gathering the data for psi/phi ratio and calculating the globally needed average
+
         ratio_psi_mean_local = ratio_psi_local.mean()
         ratio_psi_mean = np.empty(shape=[1], dtype=np.complex)
 
-        comm.Reduce(ratio_psi_mean_local, ratio_psi_mean, root=0)
+        comm.Allreduce(ratio_psi_mean_local, ratio_psi_mean)
+        ratio_psi_mean /= p
 
-        if r==0:
-            ratio_psi_mean /= p
-
-        comm.Bcast(ratio_psi_mean, root=0)
+        ########################
 
         grad_logF_local = O_local.mean(axis=0).conj() - (ratio_psi_local.reshape(-1,1)*O_local.conj()).mean(axis=0)/ratio_psi_mean
 
@@ -257,14 +250,16 @@ def parallel_hadamard_optimization(rbm, comm, n, init=None, tol=1e-6, lookback=5
                 lr_ = max(lr_min, lr*np.exp(-t/lr_tau))
 
             params -= lr_*delta_theta
-        
-        F_mean_old = F_mean_new
-        F_mean_new = comm.bcast(F_mean_new, root=0)
+            logpsi.a, logpsi.b, logpsi.W = utils.unpack_params(params, nv, nh)
+
+        logpsi = comm.bcast(logpsi, root=0)
         F = comm.bcast(F, root=0)
+        
         history.append(F)
 
-        comm.Bcast(params, root=0)
-        logpsi.a, logpsi.b, logpsi.W = utils.unpack_params(params, nv, nh)
+        if t > 2*lookback:
+            F_mean_old = sum(history[-2*lookback:lookback])/lookback
+            F_mean_new = sum(history[-lookback:])/lookback
         
         if resample_phi is not None:
             if t%resample_phi == 0:
@@ -272,7 +267,7 @@ def parallel_hadamard_optimization(rbm, comm, n, init=None, tol=1e-6, lookback=5
                 phiphi_local = rbm.eval_H(n, phi_samples)
 
         if r==0 and time() - clock > 20 and verbose:
-            print('Iteration {:4d} | Fidelity = {:05.4f} | lr = {:04.3f}'.format(t, F, lr_))
+            print('Iteration {:4d} | Fidelity = {:05.4f} | lr = {:04.3f}| diff_mean_F={:08.7f}'.format(t, F, lr, F_mean_new - F_mean_old))
             clock = time()
 
     return logpsi.a, logpsi.b, logpsi.W, history
@@ -343,7 +338,7 @@ def parallel_hadamard_optimization_2(rbm, comm, n, init=None, tol=1e-6, lookback
         phi_samples = phi_samples.reshape(-1, nv)
         phiphi = rbm.eval_H(n, phi_samples)
     
-    F = 0
+    F = 0.0
     F_mean_new = 0.0
     F_mean_old = 0.0
     history = []
@@ -377,10 +372,6 @@ def parallel_hadamard_optimization_2(rbm, comm, n, init=None, tol=1e-6, lookback
             psiphi = logpsi(phi_samples)
             F = utils.mcmc_fidelity(psipsi, psiphi, phipsi, phiphi)
 
-            if t > 2*lookback:
-                F_mean_old = F_mean_new
-                F_mean_new = sum(history[-lookback:])/lookback
-
             gas, gbs, gWs = logpsi.grad_log(psi_samples)
             O = np.concatenate([gas, gbs, gWs.reshape(-1, nv*nh)], axis=1)
             S = S_matrix(O)
@@ -396,9 +387,14 @@ def parallel_hadamard_optimization_2(rbm, comm, n, init=None, tol=1e-6, lookback
             params -= lr*delta_theta
             logpsi.a, logpsi.b, logpsi.W = utils.unpack_params(params, nv, nh)
 
+            if t > 2*lookback:
+                F_mean_old = sum(history[-2*lookback:lookback])/lookback
+                F_mean_new = sum(history[-lookback:])/lookback
+
         logpsi = comm.bcast(logpsi, root=0)
-        F_mean_old = F_mean_new
-        F, F_mean_new = comm.bcast([F, F_mean_new], root=0)
+        F = comm.bcast(F, root=0)
+        F_mean_new = comm.bcast(F_mean_new, root=0)
+        F_mean_old = comm.bcast(F_mean_old, root=0)
         history.append(F)
         
         if resample_phi is not None:
@@ -418,7 +414,7 @@ def parallel_hadamard_optimization_2(rbm, comm, n, init=None, tol=1e-6, lookback
         
         if r==0:
             if time() - clock > 30 and verbose:
-                print('Iteration {:4d} | Fidelity = {:05.4f} | lr = {:04.3f}'.format(t, F, lr))
+                print('Iteration {:4d} | Fidelity = {:05.4f} | lr = {:04.3f} | diff_mean_F={:08.7f}'.format(t, F, lr, F_mean_new - F_mean_old))
                 clock = time()
 
     return logpsi.a, logpsi.b, logpsi.W, history

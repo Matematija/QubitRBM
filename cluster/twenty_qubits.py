@@ -68,45 +68,50 @@ logpsi = comm.bcast(logpsi, root=0)
 
 ########## Parallel optimization ##########
 
-lr = 1e-1
+lr = 7e-2
 lrf = 8e-2
 # steps = 400
 # lr_tau = steps/np.log(lr/lrf)
 lr_tau = None
 lr_min = lrf
 
-tol = 1e-5
+tol = 1e-3
 add_units = 2
 
 for n in range(nv):
     
     if r==0:
         print('Qubit {} starting...'.format(n+1))
-    
-    while True:
 
-        # a, b, W, Fs = parallel_hadamard_optimization(logpsi, comm, n, tol=tol, lr=lr, lr_tau=lr_tau, lr_min=lr_min,
-        #                                                 lookback=50, resample_phi=None, sigma=0.0,
-        #                                                 psi_mcmc_params=(20000,50,1), phi_mcmc_params=(20000,50,1),
-        #                                                 eps=1e-6, verbose=True)
+    loop = True
 
-        a, b, W, Fs = parallel_hadamard_optimization_2(logpsi, comm, n, tol=tol, lr=lr,
+    while loop:
+
+        a, b, W, Fs = parallel_hadamard_optimization(logpsi, comm, n, tol=tol, lr=lr, lr_tau=lr_tau, lr_min=lr_min,
                                                         lookback=50, resample_phi=None, sigma=0.0,
-                                                        psi_mcmc_params=(2000,100,10), phi_mcmc_params=(2000,100,10),
-                                                        eps=1e-6, verbose=True)
+                                                        psi_mcmc_params=(2000,10,10), phi_mcmc_params=(2000,10,10),
+                                                        eps=1e-5, verbose=True)
+
+        # a, b, W, Fs = parallel_hadamard_optimization_2(logpsi, comm, n, tol=tol, lr=lr,
+        #                                                 lookback=50, resample_phi=None, sigma=0.0,
+        #                                                 psi_mcmc_params=(2000,100,10), phi_mcmc_params=(2000,100,10),
+        #                                                 eps=1e-6, verbose=True)
+        if r==0:
+            if Fs[-1] > 0.92:
+                logpsi.set_params(a=a, b=b, W=W)
+                logpsi.fold_imag_params()
+
+                if r==0:
+                    data['qubit_{}_Fs'.format(n)] = Fs
+
+                loop = False
+            else:
+                if r==0:
+                    print('||Repeating optimization, adding {} hidden units||'.format(add_units))
+                logpsi.add_hidden_units(add_units)
         
-        if Fs[-1] > 0.92:
-            logpsi.set_params(a=a, b=b, W=W)
-            logpsi.fold_imag_params()
-
-            if r==0:
-                data['qubit_{}_Fs'.format(n)] = Fs
-
-            break
-        else:
-            if r==0:
-                print('||Repeating optimization, adding {} hidden units||'.format(add_units))
-            logpsi.add_hidden_units(add_units)
+        logpsi = comm.bcast(logpsi, root=0)
+        loop = comm.bcast(loop, root=0)
 
     if r==0:
         print('\nQubit {} done! Final fidelity estimate: {:05.4f}'.format(n+1, Fs[-1]))
