@@ -258,7 +258,7 @@ def parallel_hadamard_optimization(rbm, comm, n, init=None, tol=1e-6, lookback=5
         history.append(F)
 
         if t > 2*lookback:
-            F_mean_old = sum(history[-2*lookback:lookback])/lookback
+            F_mean_old = sum(history[-2*lookback:-lookback])/lookback
             F_mean_new = sum(history[-lookback:])/lookback
         
         if resample_phi is not None:
@@ -267,7 +267,7 @@ def parallel_hadamard_optimization(rbm, comm, n, init=None, tol=1e-6, lookback=5
                 phiphi_local = rbm.eval_H(n, phi_samples)
 
         if r==0 and time() - clock > 20 and verbose:
-            print('Iteration {:4d} | Fidelity = {:05.4f} | lr = {:04.3f}| diff_mean_F={:08.7f}'.format(t, F, lr, F_mean_new - F_mean_old))
+            print('Iteration {:4d} | Fidelity = {:05.4f} | lr = {:04.3f} | diff_mean_F = {:08.7f}'.format(t, F, lr, F_mean_new - F_mean_old))
             clock = time()
 
     return logpsi.a, logpsi.b, logpsi.W, history
@@ -387,15 +387,13 @@ def parallel_hadamard_optimization_2(rbm, comm, n, init=None, tol=1e-6, lookback
             params -= lr*delta_theta
             logpsi.a, logpsi.b, logpsi.W = utils.unpack_params(params, nv, nh)
 
-            if t > 2*lookback:
-                F_mean_old = sum(history[-2*lookback:lookback])/lookback
-                F_mean_new = sum(history[-lookback:])/lookback
-
         logpsi = comm.bcast(logpsi, root=0)
         F = comm.bcast(F, root=0)
-        F_mean_new = comm.bcast(F_mean_new, root=0)
-        F_mean_old = comm.bcast(F_mean_old, root=0)
         history.append(F)
+
+        if t > 2*lookback:
+            F_mean_old = sum(history[-2*lookback:lookback])/lookback
+            F_mean_new = sum(history[-lookback:])/lookback
         
         if resample_phi is not None:
             if t%resample_phi == 0:

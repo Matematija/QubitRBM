@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import numpy as np
+import scipy
 import sys, os
 
 sys.path.append(os.path.abspath('..'))
@@ -23,9 +24,13 @@ if r == 0:
     np.__config__.show()
     print('\n')
 
+    print('Scipy config:\n')
+    scipy.__config__.show()
+    print('\n')
+
     logpsi = RBM(nv, nh)
 
-    depth = 500
+    depth = 400
     gates = [('RZZ', 2), ('RZ', 1), ('P', 1)]
     data = {}
     chosen_gates = []
@@ -55,7 +60,7 @@ if r == 0:
 
     print("Ratio nh/nv: ", logpsi.nh/logpsi.nv)
 
-    ratio = 8
+    ratio = 6
 
     if logpsi.nh/logpsi.nv < ratio:
         print("Ratio nh/nv too low, adding to get to {}".format(ratio))
@@ -68,7 +73,7 @@ logpsi = comm.bcast(logpsi, root=0)
 
 ########## Parallel optimization ##########
 
-lr = 7e-2
+lr = 6e-2
 lrf = 8e-2
 # steps = 400
 # lr_tau = steps/np.log(lr/lrf)
@@ -88,8 +93,8 @@ for n in range(nv):
     while loop:
 
         a, b, W, Fs = parallel_hadamard_optimization(logpsi, comm, n, tol=tol, lr=lr, lr_tau=lr_tau, lr_min=lr_min,
-                                                        lookback=50, resample_phi=None, sigma=0.0,
-                                                        psi_mcmc_params=(2000,10,10), phi_mcmc_params=(2000,10,10),
+                                                        lookback=20, resample_phi=None, sigma=0.0,
+                                                        psi_mcmc_params=(15000,10,1), phi_mcmc_params=(15000,10,1),
                                                         eps=1e-5, verbose=True)
 
         # a, b, W, Fs = parallel_hadamard_optimization_2(logpsi, comm, n, tol=tol, lr=lr,
