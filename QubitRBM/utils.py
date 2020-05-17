@@ -20,12 +20,9 @@ def fold_imag(z):
     else:
         return z.real + 1j*((z.imag + np.pi)%(2*np.pi) - np.pi)
 
-def log1pexp(z):
-    
-    pad = np.zeros_like(z)
-    stacked = np.stack([pad, z], axis=0)
-    
-    return logsumexp(stacked, axis=0)
+def log1pexp(z):   
+    m = np.max(z.real)
+    return m + np.log(np.exp(-m) + np.exp(z-m))
 
 def pack_params(a, b, W):
     return np.concatenate([a, b, W.reshape(-1)])
@@ -41,7 +38,7 @@ def exact_fidelity(psi, phi):
     return np.abs(np.vdot(psi, phi))**2
 
 def mcmc_fidelity(psipsi, psiphi, phipsi, phiphi):
-    term_1 = logsumexp(phipsi - psipsi) - np.log(phipsi.shape[0])
-    term_2 = logsumexp(psiphi - phiphi) - np.log(psiphi.shape[0])
+    term_1 = logsumexp(phipsi - psipsi, b=1/phipsi.shape[0])
+    term_2 = logsumexp(psiphi - phiphi, b=1/psiphi.shape[0])
 
     return np.exp(term_1 + term_2).real
