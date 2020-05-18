@@ -3,16 +3,18 @@ from scipy import sparse
 from functools import reduce
 from math import floor
 
+import sys, os
+
+libpath = os.path.abspath('..')
+if libpath not in sys.path:
+    sys.path.append(libpath)
+
+from QubitRBM.utils import _bit
+
 def _extend_to_n_qubits(matrix, ns, n_qubits):
     I = sparse.eye(2)
     qubits = np.ravel(ns)
     return reduce(sparse.kron, (matrix if i in qubits else I for i in range(n_qubits)))
-
-def _bit(x, k, n):
-    """
-    Returns the k-th binary digit of number x, padded with zeros to length n.
-    """
-    return int(bin(x)[2:].rjust(n,'0')[k])
 
 def X(n=0, n_qubits=1):
     x = np.array([[0, 1], [1, 0]], dtype=np.complex)
