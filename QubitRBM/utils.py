@@ -1,6 +1,16 @@
 import numpy as np
 from scipy.special import logsumexp
 
+def _bit(x, k, n):
+    """
+    Returns the k-th binary digit of number x, padded with zeros to length n.
+    """
+    return int(bin(x)[2:].rjust(n,'0')[k])
+
+def hilbert_iter(n_qubits):
+    for n in range(n_qubits):
+        yield np.fromiter(map(int, np.binary_repr(n, width=n_qubits)), dtype=np.bool, count=n_qubits)
+
 def sigmoid(z):
 
     big = z.real >= 0

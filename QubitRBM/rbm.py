@@ -141,7 +141,7 @@ class RBM:
     def get_exact_samples(self, n_samples, state=None, hilbert=None, **kwargs):
 
         if hilbert is None:
-            hilbert = np.array(list(self.hilbert_iter()), dtype=np.bool)
+            hilbert = np.array(list(utils.hilbert_iter(self.nv)), dtype=np.bool)
 
         if state is None:
             logvals = self(hilbert)
@@ -166,17 +166,13 @@ class RBM:
         gW = np.matmul(ga[:, :, np.newaxis], gb[:, np.newaxis, :])
         
         return np.concatenate([ga, gb, gW[:,self.mask]], axis=1)
-        
-    def hilbert_iter(self):
-        for n in range(2**self.nv):
-            yield np.fromiter(map(int, np.binary_repr(n, width=self.nv)), dtype=np.bool, count=self.nv)
             
     def get_state_vector(self, normalized=False):
         """
         If 'normalized', a normalized wavefunction is returned. Otherwise, a vector of complex log-values of the wavefunction is returned.
         """
         
-        logpsis = np.fromiter(map(self, self.hilbert_iter()), dtype=np.complex, count=2**self.nv)
+        logpsis = np.fromiter(map(self, utils.hilbert_iter(self.nv)), dtype=np.complex, count=2**self.nv)
         
         if not normalized:
             return logpsis
@@ -187,7 +183,7 @@ class RBM:
     def get_lognorm(self, method='mcmc', samples=None, **mcmc_kwargs):
 
         if method == 'exact':
-            logpsis = np.fromiter(map(self, self.hilbert_iter()), dtype=np.complex, count=2**self.nv)
+            logpsis = np.fromiter(map(self, utils.hilbert_iter(self.nv)), dtype=np.complex, count=2**self.nv)
             return logsumexp(2*logpsis.real)
 
         elif method == 'mcmc':
@@ -337,3 +333,22 @@ class RBM:
         self.a[k] += 1j*phi/2 + A
         self.a[l] += 1j*phi/2 - A
         self.C += np.log(2)
+
+    def save(self, path):
+        np.savez(path, C=self.C, a=self.a, b=self.b, W=self.W, mask=self.mask)
+
+    def load(self, path):
+
+        loaded = np.load(path)
+
+        self.C = loaded['C']
+        self.a = loaded['a']
+        self.b = loaded['b']
+        self.W = loaded['W']
+
+        self.nv, self.nh = self.W.shape
+
+        if 'mask' in loaded.keys():
+            self.mask = loaded['mask']
+        else:
+            self.mask = np.ones(shape=self.W.shape, dtype=np.bool)
