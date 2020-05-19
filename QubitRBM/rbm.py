@@ -334,8 +334,8 @@ class RBM:
         self.a[l] += 1j*phi/2 - A
         self.C += np.log(2)
 
-    def save(self, path):
-        np.savez(path, C=self.C, a=self.a, b=self.b, W=self.W, mask=self.mask)
+    def save(self, path, **kwargs):
+        np.savez(path, C=self.C, a=self.a, b=self.b, W=self.W, mask=self.mask, **kwargs)
 
     def load(self, path):
 
@@ -352,3 +352,5 @@ class RBM:
             self.mask = loaded['mask']
         else:
             self.mask = np.ones(shape=self.W.shape, dtype=np.bool)
+
+        return loaded
