@@ -8,7 +8,7 @@ def _bit(x, k, n):
     return int(bin(x)[2:].rjust(n,'0')[k])
 
 def hilbert_iter(n_qubits):
-    for n in range(n_qubits):
+    for n in range(2**n_qubits):
         yield np.fromiter(map(int, np.binary_repr(n, width=n_qubits)), dtype=np.bool, count=n_qubits)
 
 def sigmoid(z):

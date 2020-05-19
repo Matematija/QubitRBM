@@ -41,15 +41,19 @@ class QAOA:
         
         self.sim = cirq.Simulator(dtype=np.complex128)
 
+    def _get_param_resolver(self, gamma, beta):
+        gamma_dict = dict(zip(self.gamma_params, np.atleast_1d(gamma)))
+        beta_dict = dict(zip(self.beta_params, np.atleast_1d(beta)))
+        return cirq.ParamResolver({**gamma_dict, **beta_dict})
+
     def sample(self, gamma, beta, n_samples):
-        param_res = cirq.ParamResolver({self.gamma_param: gamma, self.beta_param: beta})
+        param_res = self._get_param_resolver(gamma, beta)
         res = self.sim.sample(program=self.circuit, params=param_res, repetitions=n_samples)
-        
         return res.drop(labels=['gamma', 'beta'], axis=1).values
 
     def simulate(self, gamma, beta):
-        param_resolver = cirq.ParamResolver({self.gamma_param: gamma, self.beta_param: beta})
-        return self.sim.simulate(self.circuit[:-1], param_resolver=param_resolver, qubit_order=self.qubits)
+        param_res = self._get_param_resolver(gamma, beta)
+        return self.sim.simulate(self.circuit[:-1], param_resolver=param_res, qubit_order=self.qubits)
 
     def cost(self, samples):
 
