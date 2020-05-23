@@ -19,7 +19,7 @@ gamma_0, beta_0 = 1.3143397836447093, -0.4327704165659409 # p=1 optimal paramete
 
 beta_1 = np.pi/8 # fixing \beta_1
 
-gamma_1 = np.linspace(0, np.pi/4, size)[r]
+gamma_1 = np.linspace(0, np.pi/2, size)[r]
 
 logpsi = RBM(n_visible=20)
 loaded = logpsi.load('rbm_params_20_qubit_optimal.npz')
@@ -34,7 +34,7 @@ for i, j in G.edges():
 data = {'gamma_0': gamma_0, 'beta_0': beta_0, 'gamma_1': gamma_1, 'beta_1': beta_1}
 key_template = 'proc_{}#after_q{}#{}'
 
-lr = 1e-1
+lr = 5e-2
 tol = 1e-4
 
 for n in range(nq):
