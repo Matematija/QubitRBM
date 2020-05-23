@@ -31,8 +31,12 @@ class QAOA:
         self.circuit = cirq.Circuit(cirq.H.on_each(self.graph.nodes()))
 
         for p_ in range(self.p):
-            self.gamma_params.append(sympy.Symbol('gamma_{}'.format(p_)))
-            self.beta_params.append(sympy.Symbol('beta_{}'.format(p_)))
+
+            gamma = sympy.Symbol('gamma_{}'.format(p_))
+            beta = sympy.Symbol('beta_{}'.format(p_))
+
+            self.gamma_params.append(gamma)
+            self.beta_params.append(beta)
 
             self.circuit.append( (cirq.ZZPowGate(exponent=2*self.gamma_params[-1]/np.pi)(u, v) for u, v in self.graph.edges()) )
             self.circuit.append(cirq.Moment(cirq.rx(rads=2*self.beta_params[-1])(qubit) for qubit in self.graph.nodes()))
@@ -49,7 +53,7 @@ class QAOA:
     def sample(self, gamma, beta, n_samples):
         param_res = self._get_param_resolver(gamma, beta)
         res = self.sim.sample(program=self.circuit, params=param_res, repetitions=n_samples)
-        return res.drop(labels=['gamma', 'beta'], axis=1).values
+        return res.drop(labels=[col for col in res.columns if 'gamma' in col or 'beta' in col], axis=1).values
 
     def simulate(self, gamma, beta):
         param_res = self._get_param_resolver(gamma, beta)
@@ -61,7 +65,7 @@ class QAOA:
 
         for qi, qj in self.graph.edges():
             term = (-1)**(samples[:,qi.x]*samples[:,qj.x])
-            cost_value += np.mean(term)
+            cost_value += term.mean()
 
         return cost_value
 

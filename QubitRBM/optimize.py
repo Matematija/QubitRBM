@@ -43,7 +43,7 @@ def rx_optimization(rbm, n, beta, tol=1e-6, lookback=50, psi_mcmc_params=(500,5,
     clock = time()
     t = 0
 
-    while (np.abs(F_mean_new - F_mean_old) > tol or t < 2*lookback + 1) and F_mean_new < 0.99:
+    while (np.abs(F_mean_new - F_mean_old) > tol or t < 2*lookback + 1) and F_mean_new < 0.999:
         
         t += 1
 

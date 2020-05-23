@@ -25,8 +25,10 @@ class RBM:
         self.C = -self.nh*np.log(2)
         self.num_extra_hs = 0
 
-    def set_params(self, a=None, b=None, W=None):
+    def set_params(self, C=None, a=None, b=None, W=None, mask=None):
 
+        if C is not None:
+            self.C = C
         if a is not None:
             self.a = a
         if b is not None:
@@ -40,6 +42,9 @@ class RBM:
                 self.nv = len(a)
             if b is not None:
                 self.nh = len(b)
+
+        if mask is not None:
+            self.mask = mask
 
     def set_flat_params(self, params):
         self.a = params[:self.nv]
@@ -167,18 +172,28 @@ class RBM:
         
         return np.concatenate([ga, gb, gW[:,self.mask]], axis=1)
             
-    def get_state_vector(self, normalized=False):
+    def get_state_vector(self, normalized=False, state=None, hilbert=None, **kwargs):
         """
         If 'normalized', a normalized wavefunction is returned. Otherwise, a vector of complex log-values of the wavefunction is returned.
         """
         
-        logpsis = np.fromiter(map(self, utils.hilbert_iter(self.nv)), dtype=np.complex, count=2**self.nv)
+        if hilbert is None:
+            hilbert = np.array(list(utils.hilbert_iter(self.nv))) 
+        
+        if state is None:
+            logvals = self(hilbert)
+        elif state.lower() == 'rx':
+            logvals = self.eval_RX(hilbert, **kwargs)
+        elif state.lower() == 'h':
+            logvals = self.eval_H(hilbert, **kwargs)
+        else:
+            raise KeyError('Invalid "state": {}'.format(state)) 
         
         if not normalized:
-            return logpsis
+            return logvals
         else:
-            logZ = logsumexp(2*logpsis.real)
-            return np.exp(logpsis - 0.5*logZ, dtype=np.complex)
+            logZ = logsumexp(2*logvals.real)
+            return np.exp(logvals - 0.5*logZ, dtype=np.complex)
         
     def get_lognorm(self, method='mcmc', samples=None, **mcmc_kwargs):
 
@@ -319,7 +334,8 @@ class RBM:
         self.W[l,-1] = 2*B
         self.a[k] += B
         self.a[l] -= B
-        self.C += np.log(2) - 1j*phi/2
+        # self.C += np.log(2) - 1j*phi/2
+        self.C += np.log(2)
 
     def CRZ(self, k, l, phi):
 
@@ -339,18 +355,9 @@ class RBM:
 
     def load(self, path):
 
-        loaded = np.load(path)
+        f = np.load(path)
 
-        self.C = loaded['C']
-        self.a = loaded['a']
-        self.b = loaded['b']
-        self.W = loaded['W']
-
-        self.nv, self.nh = self.W.shape
-
-        if 'mask' in loaded.keys():
-            self.mask = loaded['mask']
-        else:
-            self.mask = np.ones(shape=self.W.shape, dtype=np.bool)
+        C, a, b, W = f['C'].copy(), f['a'].copy(), f['b'].copy(), f['W'].copy()
+        self.set_params(C=C, a=a, b=b, W=W, mask=mask)
 
         return loaded
