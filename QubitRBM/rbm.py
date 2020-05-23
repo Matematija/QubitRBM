@@ -357,7 +357,7 @@ class RBM:
 
         f = np.load(path)
 
-        C, a, b, W = f['C'].copy(), f['a'].copy(), f['b'].copy(), f['W'].copy()
+        C, a, b, W, mask = f['C'].copy(), f['a'].copy(), f['b'].copy(), f['W'].copy(), f['mask'].copy()
         self.set_params(C=C, a=a, b=b, W=W, mask=mask)
 
-        return loaded
+        return f
