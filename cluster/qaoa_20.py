@@ -58,7 +58,7 @@ for n in range(nq):
 
 #### WRITING FILES ####
 
-save_folder = os.path.join(os.getcwd(), 'output_data_pi8')
+save_folder = os.path.join(os.getcwd(), 'output_data_pi8_3')
 
 if not os.path.exists(save_folder):
     os.mkdir(save_folder)
