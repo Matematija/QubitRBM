@@ -14,15 +14,14 @@ r = comm.Get_rank()
 size = comm.Get_size()
 
 nq = 20
+k = 3
 
-gamma_0, beta_0 = 1.3143397836447093, -0.4327704165659409 # p=1 optimal parameters
-
-beta_1 = np.pi/8 # fixing \beta_1
-
-gamma_1 = np.linspace(0, np.pi/2, size)[r]
+gamma_0, beta_0 = 0.32057067893773394, 0.40071334867216746 # p=1 & k=3 optimal parameters
+beta_1 = np.pi/16 # fixing \beta_1
+gamma_1 = np.linspace(0, np.pi/4, size)[r] # gamma is set on half-interval !!!!
 
 logpsi = RBM(n_visible=20)
-loaded = logpsi.load('rbm_params_20_qubit_optimal.npz')
+loaded = logpsi.load('rbm_params_20_qubit_optimal.npz') # k=3, preoptimized for p=1
 
 G = nx.from_numpy_matrix(loaded['graph'])
 
@@ -30,6 +29,7 @@ for i, j in G.edges():
     logpsi.RZZ(i, j, phi=2*gamma_1)
 
 logpsi.mask[:] = True
+logpsi.add_hidden_units(num=6*logpsi.nv - logpsi.nh)
 
 data = {'gamma_0': gamma_0, 'beta_0': beta_0, 'gamma_1': gamma_1, 'beta_1': beta_1}
 key_template = 'proc_{}#after_q{}#{}'
@@ -58,7 +58,7 @@ for n in range(nq):
 
 #### WRITING FILES ####
 
-save_folder = os.path.join(os.getcwd(), 'output_data_pi8_3')
+save_folder = os.path.join(os.getcwd(), 'output_data_pi16')
 
 if not os.path.exists(save_folder):
     os.mkdir(save_folder)
