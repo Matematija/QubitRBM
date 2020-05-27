@@ -18,7 +18,7 @@ def S_matrix(O):
     O_centered = O - O.mean(axis=0, keepdims=True)
     return np.matmul(O_centered.T.conj(), O_centered)/O.shape[0]
 
-def rx_optimization(rbm, n, beta, tol=1e-6, lookback=50, psi_mcmc_params=(500,5,50,1), phi_mcmc_params=(500,5,50,1),
+def rx_optimization(rbm, n, beta, tol=1e-6, lookback=50, max_iters=10000, psi_mcmc_params=(500,5,50,1), phi_mcmc_params=(500,5,50,1),
                     sigma=1e-5, resample_phi=None, lr=5e-2, lr_tau=None, lr_min=0.0, eps=1e-6, verbose=False):
 
     psi_mcmc_args = dict(zip(['n_steps', 'n_chains', 'warmup', 'step'], psi_mcmc_params))
@@ -43,7 +43,7 @@ def rx_optimization(rbm, n, beta, tol=1e-6, lookback=50, psi_mcmc_params=(500,5,
     clock = time()
     t = 0
 
-    while (np.abs(F_mean_new - F_mean_old) > tol or t < 2*lookback + 1) and F_mean_new < 0.999:
+    while (np.abs(F_mean_new - F_mean_old) > tol or t < 2*lookback + 1) and F_mean_new < 0.999 and t < max_iters:
         
         t += 1
 

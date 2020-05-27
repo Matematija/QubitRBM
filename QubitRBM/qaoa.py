@@ -26,7 +26,6 @@ class QAOA:
         
         self.gamma_params = []
         self.beta_params = []
-        self.param_bounds = np.array([[0, -np.pi/4], [np.pi/2, np.pi/4]])
 
         self.circuit = cirq.Circuit(cirq.H.on_each(self.graph.nodes()))
 
@@ -50,6 +49,16 @@ class QAOA:
         beta_dict = dict(zip(self.beta_params, np.atleast_1d(beta)))
         return cirq.ParamResolver({**gamma_dict, **beta_dict})
 
+    def _get_param_bounds_for_optim(self, gamma_lims=(0, np.pi/2), beta_lims=(-np.pi/4, np.pi/4)):
+
+        gl, gu = gamma_lims
+        bl, bu = beta_lims
+
+        lower = np.concatenate([gl*np.ones(self.p), bl*np.ones(self.p)])
+        upper = np.concatenate([gu*np.ones(self.p), bu*np.ones(self.p)]) 
+
+        return (lower, upper)
+
     def sample(self, gamma, beta, n_samples):
         param_res = self._get_param_resolver(gamma, beta)
         res = self.sim.sample(program=self.circuit, params=param_res, repetitions=n_samples)
@@ -69,11 +78,21 @@ class QAOA:
 
         return cost_value
 
-    def cost_from_params(self, params, n_samples):
-        samples = self.sample(*params, n_samples)
-        return self.cost(samples)
+    def cost_from_params(self, gamma, beta, method='exact', **kwargs):
 
-    def cost_from_probs(self, p, hilbert=None):
+        if method.lower() == 'exact':
+            psi = self.simulate(gamma, beta).final_state
+            p = np.abs(psi)**2
+            return self.cost_from_probs(p, **kwargs)
+
+        elif method.lower().startswith('sampl'):
+            samples = self.sample(gamma, beta, **kwargs)
+            return self.cost(samples)
+
+        else:
+            raise KeyError('Expected "exact" or "sampling" for method, got {}'.format(method))
+
+    def cost_from_probs(self, probs, hilbert=None):
 
         if hilbert is None:
             hilbert = np.array(list(utils.hilbert_iter(self.n_qubits)), dtype=np.int)
@@ -81,18 +100,24 @@ class QAOA:
         cost = 0.0
 
         for qi, qj in self.graph.edges():
-            term = p*(-1)**(hilbert[:,qi.x]*hilbert[:,qj.x])
+            term = probs*(-1)**(hilbert[:,qi.x]*hilbert[:,qj.x])
             cost += term.sum()
 
         return cost
     
-    def optimize(self, n_samples, init=None, **kwargs):
+    def optimize(self, init=None, method='exact', **kwargs):
 
         if init is None:
-            gamma = np.random.uniform(0, np.pi/2)
-            beta = np.random.uniform(-np.pi/4, np.pi/4)
-            init = np.array([gamma, beta])
+            gamma = np.random.uniform(0, np.pi/2, size=self.p)
+            beta = np.random.uniform(-np.pi/4, np.pi/4, size=self.p)
+            init = np.concatenate([gamma, beta])
 
-        objfun = lambda params: self.cost_from_params(params, n_samples)
+        objfun_kwargs = {key: val for key, val in kwargs.items() if key in ['hilbert', 'n_samples']}
+        optim_kwargs = {key: val for key, val in kwargs.items() if key not in ['hilbert', 'n_samples']}
 
-        return optim.solve(objfun=objfun, x0=init, bounds=self.param_bounds, objfun_has_noise=True, **kwargs)
+        has_noise = False if method.lower() == 'exact' else True
+        objfun = lambda params: self.cost_from_params(params[:self.p], params[self.p:], method=method, **objfun_kwargs)
+
+        bounds = self._get_param_bounds_for_optim()
+
+        return optim.solve(objfun=objfun, x0=init, bounds=bounds, objfun_has_noise=has_noise, **optim_kwargs)
