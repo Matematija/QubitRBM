@@ -29,7 +29,7 @@ for i, j in G.edges():
     logpsi.RZZ(i, j, phi=2*gamma_1)
 
 logpsi.mask[:] = True
-logpsi.add_hidden_units(num=6*logpsi.nv - logpsi.nh)
+# logpsi.add_hidden_units(num=6*logpsi.nv - logpsi.nh)
 
 data = {'gamma_0': gamma_0, 'beta_0': beta_0, 'gamma_1': gamma_1, 'beta_1': beta_1}
 key_template = 'proc_{}#after_q{}#{}'
@@ -42,7 +42,7 @@ for n in range(nq):
     print('Qubit {} starting on process {}...'.format(n+1, r))
         
     params, Fs = rx_optimization(logpsi, n, beta_1, tol=tol, lr=lr, lookback=10, resample_phi=1, sigma=0.0,
-                                   psi_mcmc_params=(2000,3,100,20), phi_mcmc_params=(2000,3,100,20),
+                                   psi_mcmc_params=(3000,3,300,15), phi_mcmc_params=(3000,3,300,15),
                                    eps=1e-5, verbose=False)
     
     logpsi.set_flat_params(params)
