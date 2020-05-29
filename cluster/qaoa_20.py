@@ -16,9 +16,9 @@ size = comm.Get_size()
 nq = 20
 k = 3
 
-gamma_0, beta_0 = 0.32057067893773394, 0.40071334867216746 # p=1 & k=3 optimal parameters
-beta_1 = np.pi/16 # fixing \beta_1
-gamma_1 = np.linspace(0, np.pi/4, size)[r] # gamma is set on half-interval !!!!
+gamma_0, beta_0 = 0.28851361104396056, -0.36865628077839413 # Optimal values for p=1 and k=3
+beta_1 = 3*np.pi/8 # fixing \beta_1
+gamma_1 = np.linspace(0, np.pi/2, size)[r]
 
 logpsi = RBM(n_visible=20)
 loaded = logpsi.load('rbm_params_20_qubit_optimal.npz') # k=3, preoptimized for p=1
@@ -42,7 +42,7 @@ for n in range(nq):
     print('Qubit {} starting on process {}...'.format(n+1, r))
         
     params, Fs = rx_optimization(logpsi, n, beta_1, tol=tol, lr=lr, lookback=10, resample_phi=1, sigma=0.0,
-                                   psi_mcmc_params=(3000,3,300,15), phi_mcmc_params=(3000,3,300,15),
+                                   psi_mcmc_params=(5000,3,300,15), phi_mcmc_params=(5000,3,300,15),
                                    eps=1e-5, verbose=False)
     
     logpsi.set_flat_params(params)
@@ -58,7 +58,7 @@ for n in range(nq):
 
 #### WRITING FILES ####
 
-save_folder = os.path.join(os.getcwd(), 'output_data_pi16_2')
+save_folder = os.path.join(os.getcwd(), 'output_data_3pi8')
 
 if not os.path.exists(save_folder):
     os.mkdir(save_folder)
