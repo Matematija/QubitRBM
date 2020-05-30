@@ -17,7 +17,7 @@ nq = 20
 k = 3
 
 gamma_0, beta_0 = 0.28851361104396056, -0.36865628077839413 # Optimal values for p=1 and k=3
-beta_1 = 3*np.pi/8 # fixing \beta_1
+beta_1 = 7*np.pi/16 # fixing \beta_1
 gamma_1 = np.linspace(0, np.pi/2, size)[r]
 
 logpsi = RBM(n_visible=20)
@@ -58,7 +58,7 @@ for n in range(nq):
 
 #### WRITING FILES ####
 
-save_folder = os.path.join(os.getcwd(), 'output_data_3pi8')
+save_folder = os.path.join(os.getcwd(), 'output_data_7pi16')
 
 if not os.path.exists(save_folder):
     os.mkdir(save_folder)
