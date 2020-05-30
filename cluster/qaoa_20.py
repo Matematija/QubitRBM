@@ -42,7 +42,7 @@ for n in range(nq):
     print('Qubit {} starting on process {}...'.format(n+1, r))
         
     params, Fs = rx_optimization(logpsi, n, beta_1, tol=tol, lr=lr, lookback=10, resample_phi=1, sigma=0.0,
-                                   psi_mcmc_params=(7000,3,800,30), phi_mcmc_params=(7000,3,800,30),
+                                   psi_mcmc_params=(2000,16,2000,30), phi_mcmc_params=(2000,16,2000,30),
                                    eps=1e-5, verbose=False)
     
     logpsi.set_flat_params(params)
