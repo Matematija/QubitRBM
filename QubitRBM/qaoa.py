@@ -22,12 +22,13 @@ class QAOA:
         self.p = p
         
         self.qubits = cirq.LineQubit.range(self.n_qubits)
-        self.graph = nx.relabel_nodes(graph, mapping={i: self.qubits[i] for i in range(self.n_qubits)})
+        self.graph = graph.copy()
+        self.circuit_graph = nx.relabel_nodes(graph, mapping={i: self.qubits[i] for i in range(self.n_qubits)})
         
         self.gamma_params = []
         self.beta_params = []
 
-        self.circuit = cirq.Circuit(cirq.H.on_each(self.graph.nodes()))
+        self.circuit = cirq.Circuit(cirq.H.on_each(self.circuit_graph.nodes()))
 
         for p_ in range(self.p):
 
@@ -37,10 +38,10 @@ class QAOA:
             self.gamma_params.append(gamma)
             self.beta_params.append(beta)
 
-            self.circuit.append( (cirq.ZZPowGate(exponent=2*self.gamma_params[-1]/np.pi)(u, v) for u, v in self.graph.edges()) )
-            self.circuit.append(cirq.Moment(cirq.rx(rads=2*self.beta_params[-1])(qubit) for qubit in self.graph.nodes()))
+            self.circuit.append( (cirq.ZZPowGate(exponent=2*self.gamma_params[-1]/np.pi)(u, v) for u, v in self.circuit_graph.edges()) )
+            self.circuit.append(cirq.Moment(cirq.rx(rads=2*self.beta_params[-1])(qubit) for qubit in self.circuit_graph.nodes()))
 
-        self.circuit.append((cirq.measure(qubit) for qubit in self.graph.nodes()))
+        self.circuit.append((cirq.measure(qubit) for qubit in self.circuit_graph.nodes()))
         
         self.sim = cirq.Simulator(dtype=np.complex128)
 
@@ -68,15 +69,9 @@ class QAOA:
         param_res = self._get_param_resolver(gamma, beta)
         return self.sim.simulate(self.circuit[:-1], param_resolver=param_res, qubit_order=self.qubits)
 
-    def cost(self, samples):
-
-        cost_value = 0.0
-
-        for qi, qj in self.graph.edges():
-            term = (-1)**(samples[:,qi.x]*samples[:,qj.x])
-            cost_value += term.mean()
-
-        return cost_value
+    def cost(self, configs):
+        B = np.atleast_2d(configs)
+        return ((-1)**B[:, self.graph.edges()]).prod(axis=-1).sum(axis=-1)
 
     def cost_from_params(self, gamma, beta, method='exact', **kwargs):
 
@@ -95,15 +90,9 @@ class QAOA:
     def cost_from_probs(self, probs, hilbert=None):
 
         if hilbert is None:
-            hilbert = np.array(list(utils.hilbert_iter(self.n_qubits)), dtype=np.int)
+            hilbert  = np.array(list(utils.hilbert_iter(self.n_qubits))) 
 
-        cost = 0.0
-
-        for qi, qj in self.graph.edges():
-            term = probs*(-1)**(hilbert[:,qi.x]*hilbert[:,qj.x])
-            cost += term.sum()
-
-        return cost
+        return np.sum(probs*self.cost(hilbert))
     
     def optimize(self, init=None, method='exact', **kwargs):
 
@@ -121,3 +110,28 @@ class QAOA:
         bounds = self._get_param_bounds_for_optim()
 
         return optim.solve(objfun=objfun, x0=init, bounds=bounds, objfun_has_noise=has_noise, **optim_kwargs)
+
+    def grad_cost(self, gamma, beta, dx=1e-4, hilbert=None):
+
+        gs = np.atleast_1d(gamma)
+        bs = np.atleast_1d(beta)
+
+        grad = np.empty(shape=2*self.p)
+
+        if hilbert is None:
+            hilbert  = np.array(list(utils.hilbert_iter(self.n_qubits)))
+
+        for j, (g, b) in enumerate(zip(gs, bs)):
+            
+            e = np.zeros(self.p)
+            e[j] = 1
+
+            gamma_p = self.cost_from_params(gamma + e*dx/2, beta, hilbert=hilbert)
+            gamma_m = self.cost_from_params(gamma - e*dx/2, beta, hilbert=hilbert)
+            grad[j] = (gamma_p - gamma_m)/dx
+
+            beta_p = self.cost_from_params(gamma, beta + e*dx/2, hilbert=hilbert)
+            beta_m = self.cost_from_params(gamma, beta - e*dx/2, hilbert=hilbert)
+            grad[self.p + j] = (beta_p - beta_m)/dx
+
+        return grad

@@ -90,3 +90,52 @@ def rx_optimization(rbm, n, beta, tol=1e-6, lookback=50, max_iters=10000, psi_mc
             clock = time()
 
     return params, history
+
+def qaoadam(qaoa, lr, tol, init=None, betas=(0.9, 0.999), eps=1e-6, hilbert=None, dx=1e-5, verbose=True):
+
+    beta1, beta2 = betas
+    
+    if init is None:
+        gamma = np.random.uniform(0, np.pi/2, size=qaoa.p)
+        beta = np.random.uniform(-np.pi/4, np.pi/4, size=qaoa.p)
+        params = np.concatenate([gamma, beta])
+    else:
+        params = np.array(init).copy()
+
+    if hilbert is None:
+        hilbert = np.array(list(utils.hilbert_iter(qaoa.n_qubits)))
+
+    m = np.zeros_like(params)
+    v = np.zeros_like(params)
+    t = 0
+    clock = time()
+    history = []
+
+    while True:
+
+        t += 1
+        
+        g, b = np.split(params, 2)
+        grad = qaoa.grad_cost(g, b, hilbert=hilbert, dx=dx)
+
+        m = beta1*m + (1-beta1)*grad
+        v = beta2*v + (1-beta2)*grad**2
+
+        m_hat = m/(1 + beta1**t)
+        v_hat = v/(1 + beta2**t)
+
+        d_params = lr * m_hat/(np.sqrt(v_hat) + eps)
+
+        if np.any(d_params > tol):
+            params -= d_params
+        else:
+            break
+
+        f = qaoa.cost_from_params(g, b, hilbert=hilbert)
+        history.append(f)
+
+        if time() - clock > 30 and verbose:
+            print('Iteration {} | Cost = {}'.format(t, f))
+            clock = time()
+
+    return params, np.array(history)

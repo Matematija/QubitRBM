@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import sparse
-from scipy.special import logsumexp
+from scipy.special import logsumexp, factorial
 import os, sys
 
 libpath = os.path.abspath('..')
@@ -103,6 +103,8 @@ class RBM:
             log_prob_old = np.atleast_1d(2*self.eval_H(previous, *args, **kwargs).real)
         elif state.lower() == 'rx':
             log_prob_old = np.atleast_1d(2*self.eval_RX(previous, *args, **kwargs).real)
+        elif state.lower() == 'ub':
+            log_prob_old = np.atleast_1d(2*self.eval_UB(previous, *args, **kwargs).real)
         else:
             raise KeyError('Invalid "state": {}'.format(state))
         
@@ -123,6 +125,8 @@ class RBM:
                 log_prob_new = np.atleast_1d(2*self.eval_H(proposal, *args, **kwargs).real)
             elif state.lower() == 'rx':
                 log_prob_new = np.atleast_1d(2*self.eval_RX(proposal, *args, **kwargs).real)
+            elif state.lower() == 'ub':
+                log_prob_new = np.atleast_1d(2*self.eval_UB(proposal, *args, **kwargs).real)
             
             logA = (log_prob_new - log_prob_old)/T
 
@@ -212,6 +216,19 @@ class RBM:
         else:
             raise KeyError('Wrong "method". Expected "mcmc" or "exact", got {}'.format(method))
     
+    @staticmethod
+    def _eval_from_params(configs, a, b, W, C=0.0, squeeze=True):
+
+        B = np.atleast_2d(configs).astype(np.bool)
+        
+        term_1 = np.matmul(B, a)
+        term_2 = utils.log1pexp(b + np.matmul(B, W)).sum(axis=1)
+        
+        res = C + term_1 + term_2
+        res.imag = (res.imag + np.pi)%(2*np.pi) - np.pi 
+
+        return res if res.size > 1 else res.item() if squeeze else res  
+    
     def eval_X(self, configs, n, squeeze=True):
         
         aX = self.a.copy()
@@ -220,16 +237,8 @@ class RBM:
         WX = self.W.copy()
         WX[n,:] = -WX[n,:]
         CX = self.C + self.a[n].copy()
-        
-        B = np.atleast_2d(configs).astype(np.bool)
 
-        term_1 = np.matmul(B, aX)
-        term_2 = utils.log1pexp(bX + np.matmul(B, WX)).sum(axis=1)
-        
-        res = CX + term_1 + term_2
-        res.imag = (res.imag + np.pi)%(2*np.pi) - np.pi 
-
-        return res if res.size > 1 else res.item() if squeeze else res
+        return self._eval_from_params(configs, aX, bX, WX, CX, squeeze)
         
     def eval_Z(self, configs, n, squeeze=True):
         
@@ -239,15 +248,7 @@ class RBM:
         WZ = self.W.copy()
         CZ = self.C
         
-        B = np.atleast_2d(configs).astype(np.bool)
-        
-        term_1 = np.matmul(B, aZ)
-        term_2 = utils.log1pexp(bZ + np.matmul(B, WZ)).sum(axis=1)
-        
-        res = CZ + term_1 + term_2
-        res.imag = (res.imag + np.pi)%(2*np.pi) - np.pi 
-
-        return res if res.size > 1 else res.item() if squeeze else res
+        return self._eval_from_params(configs, aZ, bZ, WZ, CZ, squeeze)
     
     def eval_H(self, configs, n):
         return logsumexp([self.eval_X(configs, n), self.eval_Z(configs, n)], b=1/np.sqrt(2), axis=0)
@@ -260,6 +261,34 @@ class RBM:
         res.imag = (res.imag + np.pi)%(2*np.pi) - np.pi
         return res
 
+    def get_sum_X_params(self, a, b, W, C=0):
+        a_, b_, W_, C_ = a.copy(), b.copy(), W.copy(), np.complex(C)
+        
+        for i in range(self.nv):
+            a_[i] = -a_[i]
+            b_ += W_[i,:]
+            W_[i,:] = - W_[i,:]
+            C_ -= a_[i]
+        
+        return a_, b_, W_, C_
+
+    def eval_sum_X(self, configs, squeeze=True):
+        a, b, W, C = self.get_sum_X_params(self.a, self.b, self.W, self.C)
+        return self._eval_from_params(configs, a, b, W, C, squeeze)
+
+    def eval_UB(self, configs, beta, order=1, squeeze=True):
+
+        logvals = np.empty(shape=[configs.shape[0], order+1], dtype=np.complex)
+        a, b, W, C = self.a.copy(), self.b.copy(), self.W.copy(), self.C
+
+        for r in range(order+1):
+            a, b, W, C = self.get_sum_X_params(a, b, W, C)
+            logvals[:,r] = self._eval_from_params(configs, a, b, W, C, squeeze)
+
+        coefs = ((-1j*beta)**np.arange(order+1))/factorial(np.arange(order+1))
+
+        return logsumexp(logvals, b=coefs, axis=1)
+
     def X(self, n):
         """
         Applies the Pauli X gate to qubit n.
@@ -267,7 +296,7 @@ class RBM:
         self.a[n] = -self.a[n].copy()
         self.b += self.W[n,:].copy()
         self.W[n,:] = -self.W[n,:].copy()
-        self.C += self.a[n].copy()
+        self.C -= self.a[n].copy()
 
     def Y(self, n):
         """
