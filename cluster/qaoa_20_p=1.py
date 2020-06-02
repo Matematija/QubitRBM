@@ -16,23 +16,20 @@ size = comm.Get_size()
 nq = 20
 k = 3
 
-gamma_0, beta_0, _, beta_1 = 0.2393224253844294, -0.5350658391963277, 0.4409892830224139, -0.2820313757662484 # Optimal values for p=2 and k=3
-# gamma_0, beta_0 = 0.28851361104396056, -0.36865628077839413 # Optimal values for p=1 and k=3
-# beta_1 = 7*np.pi/16 # fixing \beta_1
-gamma_1 = np.linspace(0, np.pi/2, size)[r]
+gamma_opt, beta = 0.28851361104396056, -0.36865628077839413 # Optimal values for p=1 and k=3
+gamma = np.linspace(0, np.pi/2, size)[r]
 
-logpsi = RBM(n_visible=20)
-loaded = logpsi.load('rbm_params_20_qubit_optimal.npz') # k=3, preoptimized for p=1
+G = nx.random_regular_graph(k, nq)
 
-G = nx.from_numpy_matrix(loaded['graph'])
+logpsi = RBM(n_visible=nq)
 
 for i, j in G.edges(): 
-    logpsi.RZZ(i, j, phi=2*gamma_1)
+    logpsi.RZZ(i, j, phi=2*gamma)
 
-logpsi.add_hidden_units(num=4*logpsi.nv - logpsi.nh)
+# logpsi.add_hidden_units(num=4*logpsi.nv - logpsi.nh)
 logpsi.mask[:] = True
 
-data = {'gamma_0': gamma_0, 'beta_0': beta_0, 'gamma_1': gamma_1, 'beta_1': beta_1}
+data = {'gamma_0': gamma, 'beta_0': beta}
 key_template = 'proc_{}#after_q{}#{}'
 
 lr = 1e-1
@@ -42,8 +39,8 @@ for n in range(nq):
     
     print('Qubit {} starting on process {}...'.format(n+1, r))
         
-    params, Fs = rx_optimization(logpsi, n, beta_1, tol=tol, lr=lr, lookback=10, resample_phi=1, sigma=0.0,
-                                   psi_mcmc_params=(2000,16,2000,30), phi_mcmc_params=(2000,16,2000,30),
+    params, Fs = rx_optimization(logpsi, n, beta, tol=tol, lr=lr, lookback=10, resample_phi=1, sigma=0.0,
+                                   psi_mcmc_params=(2000,16,200,20), phi_mcmc_params=(2000,16,200,20),
                                    eps=1e-5, verbose=False)
     
     logpsi.set_flat_params(params)
@@ -59,7 +56,7 @@ for n in range(nq):
 
 #### WRITING FILES ####
 
-save_folder = os.path.join(os.getcwd(), 'output_data_7pi16_2')
+save_folder = os.path.join(os.getcwd(), 'output_data_p=1_opt')
 
 if not os.path.exists(save_folder):
     os.mkdir(save_folder)
