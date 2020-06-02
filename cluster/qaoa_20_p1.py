@@ -50,13 +50,13 @@ for n in range(nq):
     data[key_template.format(r, n+1, 'a')] = logpsi.a.copy()
     data[key_template.format(r, n+1, 'b')] = logpsi.b.copy()
     data[key_template.format(r, n+1, 'W')] = logpsi.W.copy()
-    data[key_template.format(r, n+1, 'Fs')] = Fs.copy()
+    data[key_template.format(r, n+1, 'Fs')] = np.array(Fs).copy()
         
     print('\nQubit {} done on process {}. Final fidelity estimate: {:05.4f}'.format(n+1, r, Fs[-1]))
 
 #### WRITING FILES ####
 
-save_folder = os.path.join(os.getcwd(), 'output_data_p=1_opt')
+save_folder = os.path.join(os.getcwd(), 'output_data_p1_opt')
 
 if not os.path.exists(save_folder):
     os.mkdir(save_folder)
