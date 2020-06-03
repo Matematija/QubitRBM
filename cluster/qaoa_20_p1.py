@@ -29,7 +29,7 @@ for i, j in G.edges():
 # logpsi.add_hidden_units(num=4*logpsi.nv - logpsi.nh)
 logpsi.mask[:] = True
 
-data = {'gamma_0': gamma, 'beta_0': beta}
+data = {'gamma_0': gamma, 'beta_0': beta, 'graph': nx.to_numpy_array(G, nodelist=sorted(G.nodes))}
 key_template = 'proc_{}#after_q{}#{}'
 
 lr = 1e-1
