@@ -108,11 +108,14 @@ class RBM:
         else:
             raise KeyError('Invalid "state": {}'.format(state))
         
-        samples = np.zeros(shape=[n_chains, warmup + step*n_steps +1, self.nv], dtype=np.bool)
-        samples[:,0,:] = previous.copy()
+        # samples = np.zeros(shape=[n_chains, warmup + step*n_steps +1, self.nv], dtype=np.bool)
+        samples = np.zeros(shape=[n_chains, n_steps, self.nv], dtype=np.bool)
+        # samples[:,0,:] = previous.copy()
+
+        sample_counter = 0
         accept_counter = np.zeros(n_chains, dtype=np.int)
         
-        for t in range(1, samples.shape[1]):
+        for t in range(warmup + step*n_steps):
 
             i = np.random.randint(low=0, high=self.nv, size=n_chains)
             
@@ -133,8 +136,11 @@ class RBM:
             accepted = logA >= np.log(np.random.rand(n_chains))
             not_accepted = np.logical_not(accepted)
 
-            samples[accepted, t, :] = proposal[accepted].copy()
-            samples[not_accepted, t, :] = previous[not_accepted].copy()
+            if t >= warmup and (t-warmup)%step == 0:
+                samples[accepted, sample_counter, :] = proposal[accepted].copy()
+                samples[not_accepted, sample_counter, :] = previous[not_accepted].copy()
+
+                sample_counter += 1
 
             previous[accepted] = proposal[accepted].copy()
             log_prob_old[accepted] = log_prob_new[accepted].copy()
@@ -145,7 +151,7 @@ class RBM:
         if verbose:
             print("Mean acceptance ratio: ", np.mean(accept_counter)/(n_steps-1))
             
-        return samples[:,(warmup+1)::step,:].reshape(-1, self.nv)
+        return samples.reshape(-1, self.nv)
 
     def get_exact_samples(self, n_samples, state=None, hilbert=None, **kwargs):
 
@@ -261,33 +267,33 @@ class RBM:
         res.imag = (res.imag + np.pi)%(2*np.pi) - np.pi
         return res
 
-    def get_sum_X_params(self, a, b, W, C=0):
-        a_, b_, W_, C_ = a.copy(), b.copy(), W.copy(), np.complex(C)
+    # def get_sum_X_params(self, a, b, W, C=0):
+    #     a_, b_, W_, C_ = a.copy(), b.copy(), W.copy(), np.complex(C)
         
-        for i in range(self.nv):
-            a_[i] = -a_[i]
-            b_ += W_[i,:]
-            W_[i,:] = - W_[i,:]
-            C_ -= a_[i]
+    #     for i in range(self.nv):
+    #         a_[i] = -a_[i]
+    #         b_ += W_[i,:]
+    #         W_[i,:] = - W_[i,:]
+    #         C_ -= a_[i]
         
-        return a_, b_, W_, C_
+    #     return a_, b_, W_, C_
 
-    def eval_sum_X(self, configs, squeeze=True):
-        a, b, W, C = self.get_sum_X_params(self.a, self.b, self.W, self.C)
-        return self._eval_from_params(configs, a, b, W, C, squeeze)
+    # def eval_sum_X(self, configs, squeeze=True):
+    #     a, b, W, C = self.get_sum_X_params(self.a, self.b, self.W, self.C)
+    #     return self._eval_from_params(configs, a, b, W, C, squeeze)
 
-    def eval_UB(self, configs, beta, order=1, squeeze=True):
+    # def eval_UB(self, configs, beta, order=1, squeeze=True):
 
-        logvals = np.empty(shape=[configs.shape[0], order+1], dtype=np.complex)
-        a, b, W, C = self.a.copy(), self.b.copy(), self.W.copy(), self.C
+    #     logvals = np.empty(shape=[configs.shape[0], order+1], dtype=np.complex)
+    #     a, b, W, C = self.a.copy(), self.b.copy(), self.W.copy(), self.C
 
-        for r in range(order+1):
-            a, b, W, C = self.get_sum_X_params(a, b, W, C)
-            logvals[:,r] = self._eval_from_params(configs, a, b, W, C, squeeze)
+    #     for r in range(order+1):
+    #         a, b, W, C = self.get_sum_X_params(a, b, W, C)
+    #         logvals[:,r] = self._eval_from_params(configs, a, b, W, C, squeeze)
 
-        coefs = ((-1j*beta)**np.arange(order+1))/factorial(np.arange(order+1))
+    #     coefs = ((-1j*beta)**np.arange(order+1))/factorial(np.arange(order+1))
 
-        return logsumexp(logvals, b=coefs, axis=1)
+    #     return logsumexp(logvals, b=coefs, axis=1)
 
     def X(self, n):
         """
