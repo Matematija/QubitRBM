@@ -240,10 +240,6 @@ def parallel_rx_optimization(comm, rbm, n, beta, tol=1e-6, lookback=50, max_iter
 
         if time() - clock > 5 and verbose and r==0:
             diff_mean_F = np.abs(F_mean_new - F_mean_old)
-
-            print(F, type(F))
-            print(diff_mean_F, type(diff_mean_F))
-
             print('Iteration {:4d} | Fidelity = {:05.4f} | lr = {:04.3f} | diff_mean_F = {:08.7f}'.format(t, F, lr_, diff_mean_F))
             clock = time()
 
