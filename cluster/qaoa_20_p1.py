@@ -17,7 +17,7 @@ nq = 20
 k = 3
 
 gamma_opt, beta = 0.28851361104396056, -0.36865628077839413 # Optimal values for p=1 and k=3
-gamma = np.linspace(0, np.pi/2, size)[r]
+gamma = np.linspace(0, np.pi/4, size)[r] ## HALF INTERVAL - picks up only the first minimum
 
 G = nx.random_regular_graph(k, nq) if r==0 else None
 G = comm.bcast(G, root=0)
