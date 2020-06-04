@@ -19,7 +19,8 @@ k = 3
 gamma_opt, beta = 0.28851361104396056, -0.36865628077839413 # Optimal values for p=1 and k=3
 gamma = np.linspace(0, np.pi/2, size)[r]
 
-G = nx.random_regular_graph(k, nq)
+G = nx.random_regular_graph(k, nq) if r==0 else None
+G = comm.bcast(G, root=0)
 
 logpsi = RBM(n_visible=nq)
 
@@ -40,7 +41,7 @@ for n in range(nq):
     print('Qubit {} starting on process {}...'.format(n+1, r))
         
     params, Fs = rx_optimization(logpsi, n, beta, tol=tol, lr=lr, lookback=10, resample_phi=1, sigma=0.0,
-                                   psi_mcmc_params=(2000,16,200,20), phi_mcmc_params=(2000,16,200,20),
+                                   psi_mcmc_params=(3000,10,500,20), phi_mcmc_params=(3000,10,500,20),
                                    eps=1e-5, verbose=False)
     
     logpsi.set_flat_params(params)
