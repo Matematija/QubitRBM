@@ -1,10 +1,9 @@
 import numpy as np
 import networkx as nx
-
 import cirq
 import sympy
 
-import pybobyqa as optim
+# import pybobyqa as optim
 
 import os, sys
 
@@ -71,7 +70,8 @@ class QAOA:
 
     def cost(self, configs):
         B = np.atleast_2d(configs)
-        return ((-1)**B[:, self.graph.edges()]).prod(axis=-1).sum(axis=-1)
+        z = (-1)**B[:, self.graph.edges()]
+        return z.prod(axis=-1).sum(axis=-1)
 
     def cost_from_params(self, gamma, beta, method='exact', **kwargs):
 
@@ -94,22 +94,22 @@ class QAOA:
 
         return np.sum(probs*self.cost(hilbert))
     
-    def optimize(self, init=None, method='exact', **kwargs):
+    # def optimize(self, init=None, method='exact', **kwargs):
 
-        if init is None:
-            gamma = np.random.uniform(0, np.pi/2, size=self.p)
-            beta = np.random.uniform(-np.pi/4, np.pi/4, size=self.p)
-            init = np.concatenate([gamma, beta])
+    #     if init is None:
+    #         gamma = np.random.uniform(0, np.pi/2, size=self.p)
+    #         beta = np.random.uniform(-np.pi/4, np.pi/4, size=self.p)
+    #         init = np.concatenate([gamma, beta])
 
-        objfun_kwargs = {key: val for key, val in kwargs.items() if key in ['hilbert', 'n_samples']}
-        optim_kwargs = {key: val for key, val in kwargs.items() if key not in ['hilbert', 'n_samples']}
+    #     objfun_kwargs = {key: val for key, val in kwargs.items() if key in ['hilbert', 'n_samples']}
+    #     optim_kwargs = {key: val for key, val in kwargs.items() if key not in ['hilbert', 'n_samples']}
 
-        has_noise = False if method.lower() == 'exact' else True
-        objfun = lambda params: self.cost_from_params(params[:self.p], params[self.p:], method=method, **objfun_kwargs)
+    #     has_noise = False if method.lower() == 'exact' else True
+    #     objfun = lambda params: self.cost_from_params(params[:self.p], params[self.p:], method=method, **objfun_kwargs)
 
-        bounds = self._get_param_bounds_for_optim()
+    #     bounds = self._get_param_bounds_for_optim()
 
-        return optim.solve(objfun=objfun, x0=init, bounds=bounds, objfun_has_noise=has_noise, **optim_kwargs)
+    #     return optim.solve(objfun=objfun, x0=init, bounds=bounds, objfun_has_noise=has_noise, **optim_kwargs)
 
     def grad_cost(self, gamma, beta, dx=1e-4, hilbert=None):
 

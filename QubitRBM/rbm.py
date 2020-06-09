@@ -11,18 +11,19 @@ import QubitRBM.utils as utils
 
 class RBM:
     
-    def __init__(self, n_visible, n_hidden=1):
+    def __init__(self, n_visible, n_hidden=1, dtype=np.complex):
         
         self.nv = n_visible
         self.nh = n_hidden
+        self.dtype = dtype
         
-        self.W = np.zeros([self.nv, self.nh], dtype=np.complex)
-        self.a = np.zeros(self.nv, dtype=np.complex)
-        self.b = np.zeros(self.nh, dtype=np.complex)
+        self.W = np.zeros([self.nv, self.nh], dtype=self.dtype)
+        self.a = np.zeros(self.nv, dtype=self.dtype)
+        self.b = np.zeros(self.nh, dtype=self.dtype)
 
         self.mask = np.ones(shape=self.W.shape, dtype=np.bool)
 
-        self.C = -self.nh*np.log(2)
+        self.C = (-self.nh*np.log(2)).astype(self.dtype)
         self.num_extra_hs = 0
 
     def set_params(self, C=None, a=None, b=None, W=None, mask=None):
@@ -35,8 +36,8 @@ class RBM:
             self.b = b
 
         if W is not None:
-            self.W = W
             self.nv, self.nh = W.shape
+            self.W = W
         else:
             if a is not None:
                 self.nv = len(a)
@@ -45,6 +46,8 @@ class RBM:
 
         if mask is not None:
             self.mask = mask
+        if self.mask.shape != self.W.shape:
+            self.mask = np.ones_like(self.W, dtype=np.bool)
 
     def set_flat_params(self, params):
         self.a = params[:self.nv]
@@ -66,7 +69,18 @@ class RBM:
         else:
             self.a += sigma*(np.random.randn(self.nv) + 1j*np.random.randn(self.nv))
             self.b += sigma*(np.random.randn(self.nh) + 1j*np.random.randn(self.nh))
-            self.W[self.mask] += sigma*(np.random.randn(self.mask.sum()) + 1j*np.random.randn(self.mask.sum())) 
+            self.W[self.mask] += sigma*(np.random.randn(self.mask.sum()) + 1j*np.random.randn(self.mask.sum()))
+
+    def set_param_dtype(self, dtype):
+
+        assert isinstance(dtype, type), 'dtype must be a data type object - got {}'.format(str(dtype))
+        assert dtype in [np.complex64, np.complex128, np.complex256], 'Provided dtype must be complex!'
+
+        self.dtype = dtype
+        self.C = dtype(self.C)
+        self.a = self.a.astype(dtype)
+        self.b = self.b.astype(dtype)
+        self.W = self.W.astype(dtype)
         
     def __call__(self, configs, squeeze=True):
 
@@ -176,7 +190,7 @@ class RBM:
         
         B = np.atleast_2d(configs).astype(np.bool)
         
-        ga = configs.copy().astype(np.complex)
+        ga = configs.copy().astype(self.dtype)
         gb = utils.sigmoid(self.b + np.matmul(B, self.W))
         gW = np.matmul(ga[:, :, np.newaxis], gb[:, np.newaxis, :])
         
@@ -203,12 +217,12 @@ class RBM:
             return logvals
         else:
             logZ = logsumexp(2*logvals.real)
-            return np.exp(logvals - 0.5*logZ, dtype=np.complex)
+            return np.exp(logvals - 0.5*logZ)
         
     def get_lognorm(self, method='mcmc', samples=None, **mcmc_kwargs):
 
         if method == 'exact':
-            logpsis = np.fromiter(map(self, utils.hilbert_iter(self.nv)), dtype=np.complex, count=2**self.nv)
+            logpsis = np.fromiter(map(self, utils.hilbert_iter(self.nv)), dtype=self.dtype, count=2**self.nv)
             return logsumexp(2*logpsis.real)
 
         elif method == 'mcmc':
@@ -260,40 +274,12 @@ class RBM:
         return logsumexp([self.eval_X(configs, n), self.eval_Z(configs, n)], b=1/np.sqrt(2), axis=0)
 
     def eval_RX(self, configs, n, beta):
-        trig = np.array([np.cos(beta), -1j*np.sin(beta)], dtype=np.complex)
+        trig = np.array([np.cos(beta), -1j*np.sin(beta)], dtype=self.dtype)
         vals = np.stack([self(configs, squeeze=False), self.eval_X(configs, n, squeeze=False)], axis=1)
 
         res = logsumexp(vals, b=trig, axis=1)
         res.imag = (res.imag + np.pi)%(2*np.pi) - np.pi
         return res
-
-    # def get_sum_X_params(self, a, b, W, C=0):
-    #     a_, b_, W_, C_ = a.copy(), b.copy(), W.copy(), np.complex(C)
-        
-    #     for i in range(self.nv):
-    #         a_[i] = -a_[i]
-    #         b_ += W_[i,:]
-    #         W_[i,:] = - W_[i,:]
-    #         C_ -= a_[i]
-        
-    #     return a_, b_, W_, C_
-
-    # def eval_sum_X(self, configs, squeeze=True):
-    #     a, b, W, C = self.get_sum_X_params(self.a, self.b, self.W, self.C)
-    #     return self._eval_from_params(configs, a, b, W, C, squeeze)
-
-    # def eval_UB(self, configs, beta, order=1, squeeze=True):
-
-    #     logvals = np.empty(shape=[configs.shape[0], order+1], dtype=np.complex)
-    #     a, b, W, C = self.a.copy(), self.b.copy(), self.W.copy(), self.C
-
-    #     for r in range(order+1):
-    #         a, b, W, C = self.get_sum_X_params(a, b, W, C)
-    #         logvals[:,r] = self._eval_from_params(configs, a, b, W, C, squeeze)
-
-    #     coefs = ((-1j*beta)**np.arange(order+1))/factorial(np.arange(order+1))
-
-    #     return logsumexp(logvals, b=coefs, axis=1)
 
     def X(self, n):
         """
@@ -332,12 +318,12 @@ class RBM:
     def add_hidden_units(self, num, b_=None, W_=None, mask=False):
 
         if b_ is None: 
-            b_ = np.zeros(shape=[num], dtype=np.complex) 
+            b_ = np.zeros(shape=[num], dtype=self.dtype) 
         if W_ is None:
-            W_ = np.zeros(shape=[self.nv, num], dtype=np.complex)
+            W_ = np.zeros(shape=[self.nv, num], dtype=self.dtype)
 
-        b = np.zeros(shape=[self.nh+num], dtype=np.complex)
-        W = np.zeros(shape=[self.nv, self.nh+num], dtype=np.complex)
+        b = np.zeros(shape=[self.nh+num], dtype=self.dtype)
+        W = np.zeros(shape=[self.nv, self.nh+num], dtype=self.dtype)
 
         b[:-num] = self.b
         b[-num:] = b_

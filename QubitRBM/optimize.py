@@ -210,7 +210,7 @@ def parallel_rx_optimization(comm, rbm, n, beta, tol=1e-6, lookback=50, max_iter
             # print('Process {} solving for delta'.format(r))
 
             S[np.diag_indices_from(S)] += eps 
-            delta_theta = solve(S, grad, assume_a='her')
+            delta_theta = solve(S, grad, overwrite_a=True, overwrite_b=True, assume_a='her')
         
             if lr_tau is not None:
                 lr_ = max(lr_min, lr*np.exp(-t/lr_tau))
@@ -245,6 +245,76 @@ def parallel_rx_optimization(comm, rbm, n, beta, tol=1e-6, lookback=50, max_iter
 
     if r==0:
         return params, history
+
+def compress_rbm(rbm, target_hidden_num, init, tol=1e-6, lookback=50, max_iters=10000, psi_mcmc_params=(500,5,50,1), phi_mcmc_params=(500,5,50,1),
+                    sigma=1e-5, resample_phi=None, lr=5e-2, lr_tau=None, lr_min=0.0, eps=1e-6, verbose=False):
+
+    psi_mcmc_args = dict(zip(['n_steps', 'n_chains', 'warmup', 'step'], psi_mcmc_params))
+    phi_mcmc_args = dict(zip(['n_steps', 'n_chains', 'warmup', 'step'], phi_mcmc_params))
+    nv, nh = rbm.nv, rbm.nh
+
+    logpsi = RBM(n_visible=nv, n_hidden=target_hidden_num)
+    logpsi.set_flat_params(init)
+
+    params = init.copy()
+    phi_samples = rbm.get_samples(**phi_mcmc_args)
+    
+    phiphi = rbm(phi_samples)
+    
+    history = []
+    F = 0
+    F_mean_new = 0.0
+    F_mean_old = 0.0
+    lr_ = lr
+    clock = time()
+    t = 0
+
+    while (np.abs(F_mean_new - F_mean_old) > tol or t < 2*lookback + 1) and F_mean_new < 0.999 and t < max_iters:
+        
+        t += 1
+
+        psi_samples = logpsi.get_samples(**psi_mcmc_args)
+        
+        psipsi = logpsi(psi_samples)
+        phipsi = rbm(psi_samples)
+        psiphi = logpsi(phi_samples)
+        
+        F = utils.mcmc_fidelity(psipsi, psiphi, phipsi, phiphi)
+        history.append(F)
+
+        O = logpsi.grad_log(psi_samples)
+        S = S_matrix(O)
+
+        ratio_psi = np.exp(phipsi - psipsi)
+        ratio_psi_mean = ratio_psi.mean()
+
+        grad_logF = O.mean(axis=0).conj() - (ratio_psi.reshape(-1,1)*O.conj()).mean(axis=0)/ratio_psi_mean
+        grad = F*grad_logF
+
+        S[np.diag_indices_from(S)] += eps 
+        delta_theta = solve(S, grad, overwrite_a=True, overwrite_b=True, assume_a='her')
+        
+        if lr_tau is not None:
+            lr_ = max(lr_min, lr*np.exp(-t/lr_tau))
+
+        params -= lr_*delta_theta
+        logpsi.set_flat_params(params)
+
+        if t > 2*lookback:
+            F_mean_old = sum(history[-2*lookback:-lookback])/lookback
+            F_mean_new = sum(history[-lookback:])/lookback
+        
+        if resample_phi is not None:
+            if t%resample_phi == 0:
+                phi_samples = rbm.get_samples(**phi_mcmc_args)
+                phiphi = rbm(phi_samples)
+
+        if time() - clock > 5 and verbose:
+            diff_mean_F = np.abs(F_mean_new - F_mean_old)
+            print('Iteration {:4d} | Fidelity = {:05.4f} | lr = {:04.3f} | diff_mean_F = {:08.7f}'.format(t, F, lr_, diff_mean_F))
+            clock = time()
+
+    return logpsi, history
 
 def qaoadam(qaoa, lr, tol, init=None, betas=(0.9, 0.999), eps=1e-6, hilbert=None, dx=1e-5, verbose=True):
 
@@ -289,7 +359,7 @@ def qaoadam(qaoa, lr, tol, init=None, betas=(0.9, 0.999), eps=1e-6, hilbert=None
         f = qaoa.cost_from_params(g, b, hilbert=hilbert)
         history.append(f)
 
-        if time() - clock > 30 and verbose:
+        if time() - clock > 10 and verbose:
             print('Iteration {} | Cost = {}'.format(t, f))
             clock = time()
 
