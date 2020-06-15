@@ -19,12 +19,11 @@ k = 3
 if r==0:
     f = np.load('54q_p1_optimal_graph_params_final.npz')
     G = nx.from_numpy_matrix(f['graph'])
-    gamma_opt, beta = f['params']
+    _, beta = f['params']
 else:
     G, gamma_opt, beta = None, None, None
 
 G = comm.bcast(G, root=0)
-gamma_opt = comm.bcast(gamma_opt, root=0)
 beta = comm.bcast(beta, root=0)
 
 gamma = np.linspace(0, np.pi/2, size)[r]
