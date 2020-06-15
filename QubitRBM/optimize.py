@@ -32,7 +32,7 @@ def rx_optimization(rbm, n, beta, tol=1e-6, lookback=50, max_iters=10000, psi_mc
     if np.abs(np.sin(beta)) > np.abs(np.cos(beta)):
         logpsi.X(n)
 
-    params = logpsi.get_flat_params()
+    params = logpsi.params
     phi_samples = rbm.get_samples(**phi_mcmc_args, state='rx', n=n, beta=beta)
     
     phiphi = rbm.eval_RX(phi_samples, n=n, beta=beta)
@@ -79,7 +79,7 @@ def rx_optimization(rbm, n, beta, tol=1e-6, lookback=50, max_iters=10000, psi_mc
             lr_ = max(lr_min, lr*np.exp(-t/lr_tau))
 
         params -= lr_*delta_theta
-        logpsi.set_flat_params(params)
+        logpsi.params = params
         
         if resample_phi is not None:
             if t%resample_phi == 0:
@@ -110,7 +110,7 @@ def parallel_rx_optimization(comm, rbm, n, beta, tol=1e-6, lookback=50, max_iter
         logpsi.X(n)
     
     logpsi.fold_imag_params()
-    params = logpsi.get_flat_params()
+    params = logpsi.params
 
     # print('Process {} sampling phi'.format(r))
 
@@ -220,7 +220,7 @@ def parallel_rx_optimization(comm, rbm, n, beta, tol=1e-6, lookback=50, max_iter
         # print('Process {} broadcasting params'.format(r))
 
         comm.Bcast(params, root=0)
-        logpsi.set_flat_params(params)
+        logpsi.params = params
 
         # print('Process {} resampling phi'.format(r))
 
@@ -254,7 +254,7 @@ def compress_rbm(rbm, target_hidden_num, init, tol=1e-6, lookback=50, max_iters=
     nv, nh = rbm.nv, rbm.nh
 
     logpsi = RBM(n_visible=nv, n_hidden=target_hidden_num)
-    logpsi.set_flat_params(init)
+    logpsi.params = init
 
     params = init.copy()
     phi_samples = rbm.get_samples(**phi_mcmc_args)
@@ -298,7 +298,7 @@ def compress_rbm(rbm, target_hidden_num, init, tol=1e-6, lookback=50, max_iters=
             lr_ = max(lr_min, lr*np.exp(-t/lr_tau))
 
         params -= lr_*delta_theta
-        logpsi.set_flat_params(params)
+        logpsi.params = params
 
         if t > 2*lookback:
             F_mean_old = sum(history[-2*lookback:-lookback])/lookback
@@ -315,52 +315,3 @@ def compress_rbm(rbm, target_hidden_num, init, tol=1e-6, lookback=50, max_iters=
             clock = time()
 
     return logpsi, history
-
-def qaoadam(qaoa, lr, tol, init=None, betas=(0.9, 0.999), eps=1e-6, hilbert=None, dx=1e-5, verbose=True):
-
-    beta1, beta2 = betas
-    
-    if init is None:
-        gamma = np.random.uniform(0, np.pi/2, size=qaoa.p)
-        beta = np.random.uniform(-np.pi/4, np.pi/4, size=qaoa.p)
-        params = np.concatenate([gamma, beta])
-    else:
-        params = np.array(init).copy()
-
-    if hilbert is None:
-        hilbert = np.array(list(utils.hilbert_iter(qaoa.n_qubits)))
-
-    m = np.zeros_like(params)
-    v = np.zeros_like(params)
-    t = 0
-    clock = time()
-    history = []
-
-    while True:
-
-        t += 1
-        
-        g, b = np.split(params, 2)
-        grad = qaoa.grad_cost(g, b, hilbert=hilbert, dx=dx)
-
-        m = beta1*m + (1-beta1)*grad
-        v = beta2*v + (1-beta2)*grad**2
-
-        m_hat = m/(1 + beta1**t)
-        v_hat = v/(1 + beta2**t)
-
-        d_params = lr * m_hat/(np.sqrt(v_hat) + eps)
-
-        if np.any(d_params > tol):
-            params -= d_params
-        else:
-            break
-
-        f = qaoa.cost_from_params(g, b, hilbert=hilbert)
-        history.append(f)
-
-        if time() - clock > 10 and verbose:
-            print('Iteration {} | Cost = {}'.format(t, f))
-            clock = time()
-
-    return params, np.array(history)

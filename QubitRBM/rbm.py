@@ -15,7 +15,9 @@ class RBM:
         
         self.nv = n_visible
         self.nh = n_hidden
-        self.dtype = dtype
+
+        assert dtype in [np.complex, np.complex64, np.complex128, np.complex256], 'Provided dtype must be complex!'
+        self.__dtype = dtype
         
         self.W = np.zeros([self.nv, self.nh], dtype=self.dtype)
         self.a = np.zeros(self.nv, dtype=self.dtype)
@@ -25,6 +27,20 @@ class RBM:
 
         self.C = (-self.nh*np.log(2)).astype(self.dtype)
         self.num_extra_hs = 0
+
+    @property
+    def params(self):
+        return np.concatenate([self.a, self.b, self.W[self.mask]], axis=0)
+
+    @params.setter
+    def params(self, params):
+        self.a = params[:self.nv]
+        self.b = params[self.nv:(self.nv + self.nh)]
+        self.W[self.mask] = params[(self.nv + self.nh):]
+
+    @property
+    def num_free_params(self):
+        return self.nv + self.nh + self.mask.sum()
 
     def set_params(self, C=None, a=None, b=None, W=None, mask=None):
 
@@ -49,35 +65,22 @@ class RBM:
         if self.mask.shape != self.W.shape:
             self.mask = np.ones_like(self.W, dtype=np.bool)
 
-    def set_flat_params(self, params):
-        self.a = params[:self.nv]
-        self.b = params[self.nv:(self.nv + self.nh)]
-        self.W[self.mask] = params[(self.nv + self.nh):]
-
-    def get_flat_params(self):
-        return np.concatenate([self.a, self.b, self.W[self.mask]], axis=0)
-
-    def num_free_params(self):
-        return self.nv + self.nh + self.mask.sum()
-
     def rand_init_params(self, sigma=0.1, add=False):
+        noise = sigma*(np.random.randn(self.num_free_params) + 1j*np.random.randn(self.num_free_params)) 
+        self.params = self.params + noise if not add else noise
 
-        if not add:
-            self.a = sigma*(np.random.randn(self.nv) + 1j*np.random.randn(self.nv))
-            self.b = sigma*(np.random.randn(self.nh) + 1j*np.random.randn(self.nh))
-            self.W[self.mask] = sigma*(np.random.randn(self.mask.sum()) + 1j*np.random.randn(self.mask.sum())) 
-        else:
-            self.a += sigma*(np.random.randn(self.nv) + 1j*np.random.randn(self.nv))
-            self.b += sigma*(np.random.randn(self.nh) + 1j*np.random.randn(self.nh))
-            self.W[self.mask] += sigma*(np.random.randn(self.mask.sum()) + 1j*np.random.randn(self.mask.sum()))
+    @property
+    def dtype(self):
+        return self.__dtype
 
-    def set_param_dtype(self, dtype):
+    @dtype.setter
+    def dtype(self, dtype):
 
         assert isinstance(dtype, type), 'dtype must be a data type object - got {}'.format(str(dtype))
-        assert dtype in [np.complex64, np.complex128, np.complex256], 'Provided dtype must be complex!'
+        assert dtype in [np.complex, np.complex64, np.complex128, np.complex256], 'Provided dtype must be complex!'
 
-        self.dtype = dtype
-        self.C = dtype(self.C)
+        self.__dtype = dtype
+        self.C = self.C.astype(dtype)
         self.a = self.a.astype(dtype)
         self.b = self.b.astype(dtype)
         self.W = self.W.astype(dtype)
@@ -122,9 +125,7 @@ class RBM:
         else:
             raise KeyError('Invalid "state": {}'.format(state))
         
-        # samples = np.zeros(shape=[n_chains, warmup + step*n_steps +1, self.nv], dtype=np.bool)
         samples = np.zeros(shape=[n_chains, n_steps, self.nv], dtype=np.bool)
-        # samples[:,0,:] = previous.copy()
 
         sample_counter = 0
         accept_counter = np.zeros(n_chains, dtype=np.int)
@@ -237,7 +238,7 @@ class RBM:
             raise KeyError('Wrong "method". Expected "mcmc" or "exact", got {}'.format(method))
     
     @staticmethod
-    def _eval_from_params(configs, a, b, W, C=0.0, squeeze=True):
+    def __eval_from_params(configs, a, b, W, C=0.0, squeeze=True):
 
         B = np.atleast_2d(configs).astype(np.bool)
         
@@ -258,7 +259,7 @@ class RBM:
         WX[n,:] = -WX[n,:]
         CX = self.C + self.a[n].copy()
 
-        return self._eval_from_params(configs, aX, bX, WX, CX, squeeze)
+        return self.__eval_from_params(configs, aX, bX, WX, CX, squeeze)
         
     def eval_Z(self, configs, n, squeeze=True):
         
@@ -268,7 +269,7 @@ class RBM:
         WZ = self.W.copy()
         CZ = self.C
         
-        return self._eval_from_params(configs, aZ, bZ, WZ, CZ, squeeze)
+        return self.__eval_from_params(configs, aZ, bZ, WZ, CZ, squeeze)
     
     def eval_H(self, configs, n):
         return logsumexp([self.eval_X(configs, n), self.eval_Z(configs, n)], b=1/np.sqrt(2), axis=0)
