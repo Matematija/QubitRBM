@@ -49,7 +49,7 @@ for n in range(nq):
                                    psi_mcmc_params=(2000,16,1000,30), phi_mcmc_params=(2000,16,1000,30),
                                    eps=1e-5, verbose=False)
     
-    logpsi.set_flat_params(params)
+    logpsi.params = params
     logpsi.fold_imag_params()
     
     data[key_template.format(r, n+1, 'C')] = logpsi.C.copy()
