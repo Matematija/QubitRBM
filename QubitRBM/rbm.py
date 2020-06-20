@@ -11,21 +11,18 @@ import QubitRBM.utils as utils
 
 class RBM:
     
-    def __init__(self, n_visible, n_hidden=1, dtype=np.complex):
+    def __init__(self, n_visible, n_hidden=1):
         
         self.nv = n_visible
         self.nh = n_hidden
-
-        assert dtype in [np.complex, np.complex64, np.complex128, np.complex256], 'Provided dtype must be complex!'
-        self.__dtype = dtype
         
-        self.W = np.zeros([self.nv, self.nh], dtype=self.dtype)
-        self.a = np.zeros(self.nv, dtype=self.dtype)
-        self.b = np.zeros(self.nh, dtype=self.dtype)
+        self.W = np.zeros([self.nv, self.nh], dtype=complex)
+        self.a = np.zeros(self.nv, dtype=complex)
+        self.b = np.zeros(self.nh, dtype=complex)
 
         self.mask = np.ones(shape=self.W.shape, dtype=np.bool)
 
-        self.C = (-self.nh*np.log(2)).astype(self.dtype)
+        self.C = -(self.nh + self.nv/2)*np.log(2)
         self.num_extra_hs = 0
 
     @property
@@ -68,22 +65,6 @@ class RBM:
     def rand_init_params(self, sigma=0.1, add=False):
         noise = sigma*(np.random.randn(self.num_free_params) + 1j*np.random.randn(self.num_free_params)) 
         self.params = self.params + noise if not add else noise
-
-    @property
-    def dtype(self):
-        return self.__dtype
-
-    @dtype.setter
-    def dtype(self, dtype):
-
-        assert isinstance(dtype, type), 'dtype must be a data type object - got {}'.format(str(dtype))
-        assert dtype in [np.complex, np.complex64, np.complex128, np.complex256], 'Provided dtype must be complex!'
-
-        self.__dtype = dtype
-        self.C = self.C.astype(dtype)
-        self.a = self.a.astype(dtype)
-        self.b = self.b.astype(dtype)
-        self.W = self.W.astype(dtype)
         
     def __call__(self, configs, squeeze=True):
 
@@ -107,34 +88,31 @@ class RBM:
         self.b = utils.fold_imag(self.b)
         self.W = utils.fold_imag(self.W)
     
-    def get_samples(self, n_steps, state=None, init=None, n_chains=1, warmup=0, step=1, T=1.0, verbose=False, *args, **kwargs):
+    def iter_samples(self, n_steps, state=None, init=None, n_chains=1, warmup=0, step=1, T=1.0, verbose=False, *args, **kwargs):
         
         if init is None:
-            previous = np.random.rand(n_chains, self.nv) < 0.5
+            samples = np.random.rand(n_chains, self.nv) < 0.5
         else:
-            previous = init
+            samples = init
 
         if state is None:
-            log_prob_old = 2*self(previous, squeeze=False).real
+            log_prob_old = 2*self(samples, squeeze=False).real
         elif state.lower() == 'h':
-            log_prob_old = np.atleast_1d(2*self.eval_H(previous, *args, **kwargs).real)
+            log_prob_old = np.atleast_1d(2*self.eval_H(samples, *args, **kwargs).real)
         elif state.lower() == 'rx':
-            log_prob_old = np.atleast_1d(2*self.eval_RX(previous, *args, **kwargs).real)
+            log_prob_old = np.atleast_1d(2*self.eval_RX(samples, *args, **kwargs).real)
         elif state.lower() == 'ub':
-            log_prob_old = np.atleast_1d(2*self.eval_UB(previous, *args, **kwargs).real)
+            log_prob_old = np.atleast_1d(2*self.eval_UB(samples, *args, **kwargs).real)
         else:
             raise KeyError('Invalid "state": {}'.format(state))
-        
-        samples = np.zeros(shape=[n_chains, n_steps, self.nv], dtype=np.bool)
 
-        sample_counter = 0
         accept_counter = np.zeros(n_chains, dtype=np.int)
         
         for t in range(warmup + step*n_steps):
 
             i = np.random.randint(low=0, high=self.nv, size=n_chains)
             
-            proposal = previous.copy()
+            proposal = samples.copy()
             proposal[:,i] = np.logical_not(proposal[:,i])
             
             if state is None:
@@ -147,25 +125,22 @@ class RBM:
                 log_prob_new = np.atleast_1d(2*self.eval_UB(proposal, *args, **kwargs).real)
             
             logA = (log_prob_new - log_prob_old)/T
-
             accepted = logA >= np.log(np.random.rand(n_chains))
-            not_accepted = np.logical_not(accepted)
+
+            samples[accepted,:] = proposal[accepted,:]
+
+            accept_counter += accepted
 
             if t >= warmup and (t-warmup)%step == 0:
-                samples[accepted, sample_counter, :] = proposal[accepted].copy()
-                samples[not_accepted, sample_counter, :] = previous[not_accepted].copy()
+                yield samples.copy()
 
-                sample_counter += 1
-
-            previous[accepted] = proposal[accepted].copy()
             log_prob_old[accepted] = log_prob_new[accepted].copy()
-            
-            if t >= warmup :
-                accept_counter += accepted
         
         if verbose:
-            print("Mean acceptance ratio: ", np.mean(accept_counter)/(n_steps-1))
-            
+            print("Mean acceptance ratio: ", np.mean(accept_counter)/(n_steps*step))
+
+    def get_samples(self, *args, **kwargs):
+        samples = np.array(list(self.iter_samples(*args, **kwargs)))
         return samples.reshape(-1, self.nv)
 
     def get_exact_samples(self, n_samples, state=None, hilbert=None, **kwargs):
@@ -191,7 +166,7 @@ class RBM:
         
         B = np.atleast_2d(configs).astype(np.bool)
         
-        ga = configs.copy().astype(self.dtype)
+        ga = configs.copy().astype(complex)
         gb = utils.sigmoid(self.b + np.matmul(B, self.W))
         gW = np.matmul(ga[:, :, np.newaxis], gb[:, np.newaxis, :])
         
@@ -223,7 +198,7 @@ class RBM:
     def get_lognorm(self, method='mcmc', samples=None, **mcmc_kwargs):
 
         if method == 'exact':
-            logpsis = np.fromiter(map(self, utils.hilbert_iter(self.nv)), dtype=self.dtype, count=2**self.nv)
+            logpsis = np.fromiter(map(self, utils.hilbert_iter(self.nv)), dtype=complex, count=2**self.nv)
             return logsumexp(2*logpsis.real)
 
         elif method == 'mcmc':
@@ -275,7 +250,7 @@ class RBM:
         return logsumexp([self.eval_X(configs, n), self.eval_Z(configs, n)], b=1/np.sqrt(2), axis=0)
 
     def eval_RX(self, configs, n, beta):
-        trig = np.array([np.cos(beta), -1j*np.sin(beta)], dtype=self.dtype)
+        trig = np.array([np.cos(beta), -1j*np.sin(beta)], dtype=complex)
         vals = np.stack([self(configs, squeeze=False), self.eval_X(configs, n, squeeze=False)], axis=1)
 
         res = logsumexp(vals, b=trig, axis=1)
@@ -319,12 +294,12 @@ class RBM:
     def add_hidden_units(self, num, b_=None, W_=None, mask=False):
 
         if b_ is None: 
-            b_ = np.zeros(shape=[num], dtype=self.dtype) 
+            b_ = np.zeros(shape=[num], dtype=complex) 
         if W_ is None:
-            W_ = np.zeros(shape=[self.nv, num], dtype=self.dtype)
+            W_ = np.zeros(shape=[self.nv, num], dtype=complex)
 
-        b = np.zeros(shape=[self.nh+num], dtype=self.dtype)
-        W = np.zeros(shape=[self.nv, self.nh+num], dtype=self.dtype)
+        b = np.zeros(shape=[self.nh+num], dtype=complex)
+        W = np.zeros(shape=[self.nv, self.nh+num], dtype=complex)
 
         b[:-num] = self.b
         b[-num:] = b_
@@ -357,7 +332,7 @@ class RBM:
         self.a[k] += B
         self.a[l] -= B
         # self.C += np.log(2) - 1j*phi/2
-        self.C += np.log(2)
+        self.C -= np.log(2)
 
     def CRZ(self, k, l, phi):
 
@@ -370,7 +345,7 @@ class RBM:
         self.W[l,-1] = 2*A
         self.a[k] += 1j*phi/2 + A
         self.a[l] += 1j*phi/2 - A
-        self.C += np.log(2)
+        self.C -= np.log(2)
 
     def save(self, path, **kwargs):
         np.savez(path, C=self.C, a=self.a, b=self.b, W=self.W, mask=self.mask, **kwargs)

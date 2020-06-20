@@ -50,10 +50,6 @@ class QAOA:
     def circuit(self):
         return self.__circuit
 
-    @circuit.setter
-    def circuit(self, circ):
-        raise RuntimeError('Circuit is a read-only property.')
-
     @property
     def graph(self):
         return self.__graph

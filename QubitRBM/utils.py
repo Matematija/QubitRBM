@@ -52,3 +52,13 @@ def mcmc_fidelity(psipsi, psiphi, phipsi, phiphi):
     term_2 = logsumexp(psiphi - phiphi, b=1/psiphi.shape[0])
 
     return np.exp(term_1 + term_2).real
+
+def bootstrap_cost_error(vals):
+
+    n = vals.shape[0]
+    bootstrapped = np.zeros_like(vals)
+
+    for i in range(n):
+        bootstrapped[i] = np.random.choice(vals, size=n, replace=True).mean()
+
+    return bootstrapped.std()
