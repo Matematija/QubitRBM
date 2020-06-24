@@ -52,6 +52,7 @@ def mcmc_fidelity(psipsi, psiphi, phipsi, phiphi):
 
     return np.exp(term_1 + term_2).real
 
+@njit
 def bootstrap_cost_error(vals):
 
     n = vals.shape[0]
