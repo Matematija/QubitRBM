@@ -1,6 +1,10 @@
 import numpy as np
 from scipy import sparse
 from scipy.special import logsumexp, factorial
+from collections import OrderedDict
+
+from numba import njit
+
 import os, sys
 
 libpath = os.path.abspath('..')
@@ -8,6 +12,24 @@ if libpath not in sys.path:
     sys.path.append(libpath)
 
 import QubitRBM.utils as utils
+from QubitRBM.utils import log1pexp, logcosh, logaddexp
+
+# @njit(complex128[:](complex128[:,:], complex128, complex128[:], complex128[:], complex128[:,:]))
+@njit
+def _eval_RBM_from_params(B, C, a, b, W):
+    return C + np.dot(B, a) + log1pexp(b + np.dot(B, W)).sum(axis=1)
+
+@njit
+def _eval_RX_RBM_from_params(B, C, a, b, W, CX, aX, bX, WX, beta):
+
+    vals = _eval_RBM_from_params(B, C, a, b, W)
+    Xvals = _eval_RBM_from_params(B, CX, aX, bX, WX)
+
+    trig = (np.cos(beta), -1j*np.sin(beta))
+
+    return logaddexp(vals, Xvals, b=trig)
+
+########################################################################
 
 class RBM:
     
@@ -25,6 +47,9 @@ class RBM:
         self.C = -(self.nh + self.nv/2)*np.log(2)
         self.num_extra_hs = 0
 
+        self.__eval_from_params = _eval_RBM_from_params
+        self.__eval_RX_from_params = _eval_RX_RBM_from_params
+
     @property
     def params(self):
         return np.concatenate([self.a, self.b, self.W[self.mask]], axis=0)
@@ -34,6 +59,10 @@ class RBM:
         self.a = params[:self.nv]
         self.b = params[self.nv:(self.nv + self.nh)]
         self.W[self.mask] = params[(self.nv + self.nh):]
+
+    @property
+    def state_dict(self):
+        return OrderedDict(zip(['a', 'b', 'W'], [self.a, self.b. self.W]))
 
     @property
     def num_free_params(self):
@@ -66,21 +95,20 @@ class RBM:
         noise = sigma*(np.random.randn(self.num_free_params) + 1j*np.random.randn(self.num_free_params)) 
         self.params = self.params + noise if not add else noise
         
-    def __call__(self, configs, squeeze=True):
+    def __call__(self, configs, fold=True, squeeze=True):
 
         """
         Evaluates the natural logarithm of the unnormalized wavefunction.
         """
         
-        B = np.atleast_2d(configs).astype(np.bool)
+        B = np.atleast_2d(configs).astype(complex)
+        logpsi = self.__eval_from_params(B, self.C, self.a, self.b, self.W)
+
+        if fold:
+            logpsi.imag = (logpsi.imag + np.pi)%(2*np.pi) - np.pi
         
-        term_1 = np.matmul(B, self.a)
-        term_2 = utils.log1pexp(self.b.reshape(1,-1) + np.matmul(B, self.W)).sum(axis=1)
-        
-        logpsi = self.C + term_1 + term_2
-        logpsi.imag = (logpsi.imag + np.pi)%(2*np.pi) - np.pi
-        
-        return logpsi if logpsi.size > 1 else logpsi.item() if squeeze else logpsi
+        # return logpsi if logpsi.size > 1 else logpsi.item() if squeeze else logpsi
+        return logpsi
             
     def fold_imag_params(self):
         self.C = utils.fold_imag(self.C)
@@ -88,41 +116,96 @@ class RBM:
         self.b = utils.fold_imag(self.b)
         self.W = utils.fold_imag(self.W)
     
-    def iter_samples(self, n_steps, state=None, init=None, n_chains=1, warmup=0, step=1, T=1.0, verbose=False, *args, **kwargs):
+    # def iter_samples(self, n_steps, state=None, init=None, n_chains=1, warmup=0, step=1, T=1.0, n=None, beta=None, verbose=False):
+        
+    #     if init is None:
+    #         samples = (np.random.rand(n_chains, self.nv) < 0.5).astype(complex)
+    #     else:
+    #         samples = np.atleast_2d(init).astype(complex)
+
+    #     C, a, b, W = self.C, self.a, self.b, self.W
+
+    #     if state is None:
+    #         log_prob_old = 2*self.__eval_from_params(samples, C, a, b, W).real
+    #     elif state.lower() == 'rx':
+    #         CX, aX, bX, WX = self.__get_X_params(n)
+    #         log_prob_old = 2*self.__eval_RX_from_params(samples, C, a, b, W, CX, aX, bX, WX, beta).real
+    #     # elif state.lower() == 'h':
+    #     #     log_prob_old = np.atleast_1d(2*self.eval_H(samples, *args, **kwargs).real)
+    #     # elif state.lower() == 'ub':
+    #     #     log_prob_old = np.atleast_1d(2*self.eval_UB(samples, *args, **kwargs).real)
+    #     else:
+    #         raise KeyError('Invalid "state": {}'.format(state))
+
+    #     accept_counter = np.zeros(n_chains, dtype=int)
+    #     out = np.empty(shape=(n_steps, n_chains, self.nv), dtype=complex)
+    #     sample_counter = 0
+        
+    #     for t in range(warmup + step*n_steps):
+
+    #         i = np.random.randint(low=0, high=self.nv, size=n_chains)
+            
+    #         proposal = samples.copy()
+    #         proposal[:,i] = 1.0 - proposal[:,i]
+            
+    #         if state is None:
+    #             log_prob_new = 2*self.__eval_from_params(proposal, C, a, b, W).real
+    #         elif state.lower() == 'rx':
+    #             log_prob_new = 2*self.__eval_RX_from_params(proposal, C, a, b, W, CX, aX, bX, WX, beta).real
+    #         # elif state.lower() == 'h':
+    #         #     log_prob_new = np.atleast_1d(2*self.eval_H(proposal, *args, **kwargs).real)
+    #         # elif state.lower() == 'ub':
+    #         #     log_prob_new = np.atleast_1d(2*self.eval_UB(proposal, *args, **kwargs).real)
+            
+    #         logA = (log_prob_new - log_prob_old)/T
+    #         accepted = logA >= np.log(np.random.rand(n_chains))
+
+    #         samples[accepted,:] = proposal[accepted,:].copy()
+
+    #         accept_counter += accepted
+
+    #         if t >= warmup and (t-warmup)%step == 0:
+    #             # yield samples
+    #             out[sample_counter,:,:] = samples
+    #             sample_counter += 1
+
+    #         log_prob_old[accepted] = log_prob_new[accepted].copy()
+        
+    #     if verbose:
+    #         print("Mean acceptance ratio: ", np.mean(accept_counter)/(n_steps*step))
+
+    def iter_samples(self, n_steps, state=None, init=None, n_chains=1, warmup=0, step=1, T=1.0, verbose=False, n=None, beta=None):
         
         if init is None:
-            samples = np.random.rand(n_chains, self.nv) < 0.5
+            init_ = (np.random.rand(n_chains, self.nv) < 0.5).astype(complex)
         else:
-            samples = init
+            init_ = np.atleast_2d(init).astype(complex)
 
         if state is None:
-            log_prob_old = 2*self(samples, squeeze=False).real
-        elif state.lower() == 'h':
-            log_prob_old = np.atleast_1d(2*self.eval_H(samples, *args, **kwargs).real)
+            return self.__numba_sample_iter(self.C, self.a, self.b, self.W, n_steps, init_, n_chains, warmup, step, T)
         elif state.lower() == 'rx':
-            log_prob_old = np.atleast_1d(2*self.eval_RX(samples, *args, **kwargs).real)
-        elif state.lower() == 'ub':
-            log_prob_old = np.atleast_1d(2*self.eval_UB(samples, *args, **kwargs).real)
+            return self.__numba_X_sample_iter(self.C, self.a, self.b, self.W, n, beta, n_steps, init_, n_chains, warmup, step, T)
         else:
             raise KeyError('Invalid "state": {}'.format(state))
 
-        accept_counter = np.zeros(n_chains, dtype=np.int)
+    @staticmethod
+    @njit
+    def __numba_sample_iter(C, a, b, W, n_steps, init_, n_chains=1, warmup=0, step=1, T=1):
+
+        samples = init_
+        log_prob_old = 2*np.real(_eval_RBM_from_params(init_, C, a, b, W))
+        nv = init_.shape[-1]
+
+        accept_counter = np.zeros(n_chains)
         
         for t in range(warmup + step*n_steps):
 
-            i = np.random.randint(low=0, high=self.nv, size=n_chains)
+            i = np.random.randint(low=0, high=nv, size=n_chains)
             
             proposal = samples.copy()
-            proposal[:,i] = np.logical_not(proposal[:,i])
+            proposal[:,i] = 1.0 - proposal[:,i]
             
-            if state is None:
-                log_prob_new = 2*self(proposal, squeeze=False).real
-            elif state.lower() == 'h':
-                log_prob_new = np.atleast_1d(2*self.eval_H(proposal, *args, **kwargs).real)
-            elif state.lower() == 'rx':
-                log_prob_new = np.atleast_1d(2*self.eval_RX(proposal, *args, **kwargs).real)
-            elif state.lower() == 'ub':
-                log_prob_new = np.atleast_1d(2*self.eval_UB(proposal, *args, **kwargs).real)
+            log_prob_new = 2*np.real(_eval_RBM_from_params(proposal, C, a, b, W))
             
             logA = (log_prob_new - log_prob_old)/T
             accepted = logA >= np.log(np.random.rand(n_chains))
@@ -132,12 +215,47 @@ class RBM:
             accept_counter += accepted
 
             if t >= warmup and (t-warmup)%step == 0:
-                yield samples.copy()
+                yield samples.real.copy()
 
             log_prob_old[accepted] = log_prob_new[accepted].copy()
+
+    @staticmethod
+    @njit
+    def __numba_X_sample_iter(C, a, b, W, n, beta, n_steps, init_, n_chains=1, warmup=0, step=1, T=1):
+
+        aX = a.copy()
+        aX[n] = -aX[n]
+        bX = b + W[n,:]
+        WX = W.copy()
+        WX[n,:] = -WX[n,:]
+        CX = C + a[n]
+
+        samples = init_
+        log_prob_old = 2*np.real(_eval_RX_RBM_from_params(init_, C, a, b, W, CX, aX, bX, WX, beta))
+        nv = init_.shape[-1]
+
+        accept_counter = np.zeros(n_chains)
         
-        if verbose:
-            print("Mean acceptance ratio: ", np.mean(accept_counter)/(n_steps*step))
+        for t in range(warmup + step*n_steps):
+
+            i = np.random.randint(low=0, high=nv, size=n_chains)
+            
+            proposal = samples.copy()
+            proposal[:,i] = 1.0 - proposal[:,i]
+            
+            log_prob_new = 2*np.real(_eval_RX_RBM_from_params(proposal, C, a, b, W, CX, aX, bX, WX, beta))
+            
+            logA = (log_prob_new - log_prob_old)/T
+            accepted = logA >= np.log(np.random.rand(n_chains))
+
+            samples[accepted,:] = proposal[accepted,:]
+
+            accept_counter += accepted
+
+            if t >= warmup and (t-warmup)%step == 0:
+                yield samples.real.copy()
+
+            log_prob_old[accepted] = log_prob_new[accepted].copy()
 
     def get_samples(self, *args, **kwargs):
         samples = np.array(list(self.iter_samples(*args, **kwargs)))
@@ -161,15 +279,18 @@ class RBM:
         inds = np.random.choice(np.arange(2**self.nv), size=n_samples, p=p)
 
         return hilbert[inds]
-    
+
+    @staticmethod
+    @njit
+    def __grad_log_from_params(B, a, b, W):
+        ga = B.copy()
+        gb = utils.sigmoid(b + np.dot(B, W))
+        gW = np.expand_dims(ga, 2)*np.expand_dims(gb, 1)
+        return ga, gb, gW
+
     def grad_log(self, configs):
-        
-        B = np.atleast_2d(configs).astype(np.bool)
-        
-        ga = configs.copy().astype(complex)
-        gb = utils.sigmoid(self.b + np.matmul(B, self.W))
-        gW = np.matmul(ga[:, :, np.newaxis], gb[:, np.newaxis, :])
-        
+        B = np.atleast_2d(configs).astype(complex)
+        ga, gb, gW = self.__grad_log_from_params(B, self.a, self.b, self.W)
         return np.concatenate([ga, gb, gW[:,self.mask]], axis=1)
             
     def get_state_vector(self, normalized=False, state=None, hilbert=None, **kwargs):
@@ -194,39 +315,9 @@ class RBM:
         else:
             logZ = logsumexp(2*logvals.real)
             return np.exp(logvals - 0.5*logZ)
-        
-    def get_lognorm(self, method='mcmc', samples=None, **mcmc_kwargs):
 
-        if method == 'exact':
-            logpsis = np.fromiter(map(self, utils.hilbert_iter(self.nv)), dtype=complex, count=2**self.nv)
-            return logsumexp(2*logpsis.real)
+    def __get_X_params(self, n):
 
-        elif method == 'mcmc':
-            
-            if samples is None:
-                samples = self.get_samples(**mcmc_kwargs)
-
-            logpsis = self(samples)
-            return logsumexp(2*logpsis.real)
-
-        else:
-            raise KeyError('Wrong "method". Expected "mcmc" or "exact", got {}'.format(method))
-    
-    @staticmethod
-    def __eval_from_params(configs, a, b, W, C=0.0, squeeze=True):
-
-        B = np.atleast_2d(configs).astype(np.bool)
-        
-        term_1 = np.matmul(B, a)
-        term_2 = utils.log1pexp(b + np.matmul(B, W)).sum(axis=1)
-        
-        res = C + term_1 + term_2
-        res.imag = (res.imag + np.pi)%(2*np.pi) - np.pi 
-
-        return res if res.size > 1 else res.item() if squeeze else res  
-    
-    def eval_X(self, configs, n, squeeze=True):
-        
         aX = self.a.copy()
         aX[n] = -aX[n]
         bX = self.b + self.W[n,:].copy()
@@ -234,27 +325,61 @@ class RBM:
         WX[n,:] = -WX[n,:]
         CX = self.C + self.a[n].copy()
 
-        return self.__eval_from_params(configs, aX, bX, WX, CX, squeeze)
+        return CX, aX, bX, WX
+    
+    def eval_X(self, configs, n, fold=True, squeeze=True):
         
-    def eval_Z(self, configs, n, squeeze=True):
+        CX, aX, bX, WX = self.__get_X_params(n)
+
+        B = np.atleast_2d(configs).astype(complex)
+        res = self.__eval_from_params(B, CX, aX, bX, WX)
+
+        if fold:
+            return utils.fold_imag(res)
+        else:
+            return res
+        
+    def eval_Z(self, configs, n, fold=True, squeeze=True):
         
         aZ = self.a.copy()
         aZ[n] += 1j*np.pi
         bZ = self.b.copy()
         WZ = self.W.copy()
         CZ = self.C
+
+        B = np.atleast_2d(configs).astype(complex)
+        res = self.__eval_from_params(B, CZ, aZ, bZ, WZ)
         
-        return self.__eval_from_params(configs, aZ, bZ, WZ, CZ, squeeze)
+        if fold:
+            return utils.fold_imag(res)
+        else:
+            res
     
-    def eval_H(self, configs, n):
-        return logsumexp([self.eval_X(configs, n), self.eval_Z(configs, n)], b=1/np.sqrt(2), axis=0)
+    def eval_H(self, configs, n, fold=True):
 
-    def eval_RX(self, configs, n, beta):
-        trig = np.array([np.cos(beta), -1j*np.sin(beta)], dtype=complex)
-        vals = np.stack([self(configs, squeeze=False), self.eval_X(configs, n, squeeze=False)], axis=1)
+        Xvals = self.eval_X(configs, n=n, fold=False, squeeze=False)
+        Zvals = self.eval_Z(configs, n=n, fold=False, squeeze=False)
 
-        res = logsumexp(vals, b=trig, axis=1)
-        res.imag = (res.imag + np.pi)%(2*np.pi) - np.pi
+        b = (1/np.sqrt(2), 1/np.sqrt(2))
+        res = logaddexp(Xvals, Zvals, b=b)
+
+        if fold:
+            return utils.fold_imag(res)
+        else:
+            return res
+
+    def eval_RX(self, configs, n, beta, fold=True):
+
+        B = np.atleast_2d(configs).astype(complex)
+
+        C, a, b, W = self.C, self.a, self.b, self.W
+        CX, aX, bX, WX = self.__get_X_params(n)
+
+        res = self.__eval_RX_from_params(B, C, a, b, W, CX, aX, bX, WX, beta)
+
+        if fold:
+            res.imag = (res.imag + np.pi)%(2*np.pi) - np.pi
+
         return res
 
     def X(self, n):

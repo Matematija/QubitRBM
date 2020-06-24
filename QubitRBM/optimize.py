@@ -6,6 +6,8 @@ from time import time
 from copy import deepcopy
 import os, sys
 
+from numba import njit
+
 libpath = os.path.abspath('..')
 if libpath not in sys.path:
     sys.path.append(libpath)
@@ -14,11 +16,22 @@ from QubitRBM.rbm import RBM
 import QubitRBM.exact_gates as eg
 import QubitRBM.utils as utils
 
-from mpi4py import MPI
+@njit
+def _S_matrix(O):
+    T = O.shape[0]
+    Oc = O - O.sum(axis=0)/T
+    return np.dot(Oc.T.conj(), Oc)/T
 
-def S_matrix(O):
-    O_centered = O - O.mean(axis=0, keepdims=True)
-    return np.matmul(O_centered.T.conj(), O_centered)/O.shape[0]
+@njit
+def _grad_log_F(O, F, psipsi, phipsi):
+    ratio_psi = np.exp(phipsi - psipsi)
+    ratio_psi_sum = ratio_psi.sum()
+
+    T = O.shape[0]
+
+    grad_logF = O.sum(axis=0).conj()/T - (ratio_psi.reshape(-1,1)*O.conj()).sum(axis=0)/ratio_psi_sum
+    return F*grad_logF
+    
 
 def rx_optimization(rbm, n, beta, tol=1e-6, lookback=50, max_iters=10000, psi_mcmc_params=(500,5,50,1), phi_mcmc_params=(500,5,50,1),
                     sigma=1e-5, resample_phi=None, lr=5e-2, lr_tau=None, lr_min=0.0, eps=1e-6, verbose=False):
@@ -27,6 +40,9 @@ def rx_optimization(rbm, n, beta, tol=1e-6, lookback=50, max_iters=10000, psi_mc
     phi_mcmc_args = dict(zip(['n_steps', 'n_chains', 'warmup', 'step'], phi_mcmc_params))
     nv, nh = rbm.nv, rbm.nh
 
+    psi_n_samples, psi_chains, _, _ = psi_mcmc_params
+    phi_n_samples, phi_chains, _, _ = phi_mcmc_params
+
     logpsi = deepcopy(rbm)
     
     if np.abs(np.sin(beta)) > np.abs(np.cos(beta)):
@@ -34,6 +50,9 @@ def rx_optimization(rbm, n, beta, tol=1e-6, lookback=50, max_iters=10000, psi_mc
 
     params = logpsi.params
     phi_samples = rbm.get_samples(**phi_mcmc_args, state='rx', n=n, beta=beta)
+
+    phi_init = phi_samples.reshape(phi_n_samples, phi_chains, nv)[-1].copy()
+    psi_init = np.random.rand(psi_chains, nv) > 0.5
     
     phiphi = rbm.eval_RX(phi_samples, n=n, beta=beta)
     
@@ -49,7 +68,8 @@ def rx_optimization(rbm, n, beta, tol=1e-6, lookback=50, max_iters=10000, psi_mc
         
         t += 1
 
-        psi_samples = logpsi.get_samples(**psi_mcmc_args)
+        psi_samples = logpsi.get_samples(**psi_mcmc_args, init=psi_init)
+        psi_init = psi_samples.reshape(psi_n_samples, psi_chains, nv)[-1].copy()
         
         psipsi = logpsi(psi_samples)
         phipsi = rbm.eval_RX(psi_samples, n=n, beta=beta)
@@ -64,13 +84,8 @@ def rx_optimization(rbm, n, beta, tol=1e-6, lookback=50, max_iters=10000, psi_mc
             F_mean_new = sum(history[-lookback:])/lookback
 
         O = logpsi.grad_log(psi_samples)
-        S = S_matrix(O)
-
-        ratio_psi = np.exp(phipsi - psipsi)
-        ratio_psi_mean = ratio_psi.mean()
-
-        grad_logF = O.mean(axis=0).conj() - (ratio_psi.reshape(-1,1)*O.conj()).mean(axis=0)/ratio_psi_mean
-        grad = F*grad_logF
+        grad = _grad_log_F(O, F, psipsi, phipsi)
+        S = _S_matrix(O)
 
         S[np.diag_indices_from(S)] += eps 
         delta_theta = solve(S, grad, overwrite_a=True, overwrite_b=True, assume_a='her')
@@ -83,8 +98,9 @@ def rx_optimization(rbm, n, beta, tol=1e-6, lookback=50, max_iters=10000, psi_mc
         
         if resample_phi is not None:
             if t%resample_phi == 0:
-                phi_samples = rbm.get_samples(**phi_mcmc_args, state='rx', beta=beta, n=n)
+                phi_samples = rbm.get_samples(**phi_mcmc_args, init=phi_init, state='rx', beta=beta, n=n)
                 phiphi = rbm.eval_RX(phi_samples, n=n, beta=beta)
+                phi_init = phi_samples.reshape(phi_n_samples, phi_chains, nv)[-1].copy()
 
         if time() - clock > 5 and verbose:
             diff_mean_F = np.abs(F_mean_new - F_mean_old)
@@ -161,8 +177,8 @@ def parallel_rx_optimization(comm, rbm, n, beta, tol=1e-6, lookback=50, max_iter
 
         # print('Process {} reducing fidelity'.format(r))
 
-        comm.Reduce(F_fac_1_local, F_fac_1, op=MPI.SUM, root=0)
-        comm.Reduce(F_fac_2_local, F_fac_2, op=MPI.SUM, root=0)
+        comm.Reduce(F_fac_1_local, F_fac_1, root=0)
+        comm.Reduce(F_fac_2_local, F_fac_2, root=0)
         
         if r==0:
             F = np.real(F_fac_1*F_fac_2).item()/p**2
@@ -205,7 +221,7 @@ def parallel_rx_optimization(comm, rbm, n, beta, tol=1e-6, lookback=50, max_iter
 
             # print('Process {} calculating S'.format(r))
 
-            S = S_matrix(O.reshape(-1, len(params)))
+            S = _S_matrix(O.reshape(-1, len(params)))
 
             # print('Process {} solving for delta'.format(r))
 
