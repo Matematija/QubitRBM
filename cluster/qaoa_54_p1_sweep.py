@@ -142,7 +142,10 @@ key_template = 'proc_{}#after_q{}#{}'
 save_folder = os.path.join(os.getcwd(), 'output_data_54q_p1_sweep')
 
 if not os.path.exists(save_folder):
-    os.mkdir(save_folder)
+    try:
+        os.mkdir(save_folder)
+    except FileExistsError:
+        print('Output folder already exists, skipping mkdir on process {}...'.format(r))
 
 if r==0:
     graph_save_path = os.path.join(save_folder, 'graph')
