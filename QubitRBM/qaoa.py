@@ -1,10 +1,15 @@
 import numpy as np
 import networkx as nx
-import cirq
-import sympy
 
 import os, sys
 from time import time
+import warnings
+
+try:
+    import cirq
+    import sympy
+except ModuleNotFoundError:
+    warnings.warn('Could not import Cirq for direct circuit simulation. QAOA functionality is limited to exact results.')
 
 libpath = os.path.abspath('..')
 if libpath not in sys.path:
