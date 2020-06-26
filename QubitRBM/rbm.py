@@ -12,9 +12,8 @@ if libpath not in sys.path:
     sys.path.append(libpath)
 
 import QubitRBM.utils as utils
-from QubitRBM.utils import log1pexp, logcosh, logaddexp
+from QubitRBM.utils import log1pexp, logaddexp
 
-# @njit(complex128[:](complex128[:,:], complex128, complex128[:], complex128[:], complex128[:,:]))
 @njit
 def _eval_RBM_from_params(B, C, a, b, W):
     return C + np.dot(B, a) + log1pexp(b + np.dot(B, W)).sum(axis=1)

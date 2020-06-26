@@ -13,7 +13,6 @@ if libpath not in sys.path:
     sys.path.append(libpath)
 
 from QubitRBM.rbm import RBM
-import QubitRBM.exact_gates as eg
 import QubitRBM.utils as utils
 
 @njit
@@ -88,7 +87,7 @@ def rx_optimization(rbm, n, beta, tol=1e-6, lookback=50, max_iters=10000, psi_mc
         S = _S_matrix(O)
 
         S[np.diag_indices_from(S)] += eps 
-        delta_theta = solve(S, grad, overwrite_a=True, overwrite_b=True, assume_a='her')
+        delta_theta = solve(S, grad, assume_a='her')
         
         if lr_tau is not None:
             lr_ = max(lr_min, lr*np.exp(-t/lr_tau))
@@ -299,7 +298,8 @@ def compress_rbm(rbm, target_hidden_num, init, tol=1e-6, lookback=50, max_iters=
         history.append(F)
 
         O = logpsi.grad_log(psi_samples)
-        S = S_matrix(O)
+        grad = _grad_log_F(O, F, psipsi, phipsi)
+        S = _S_matrix(O)
 
         ratio_psi = np.exp(phipsi - psipsi)
         ratio_psi_mean = ratio_psi.mean()
