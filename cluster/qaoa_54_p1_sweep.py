@@ -108,6 +108,9 @@ def optimize_qaoa(graph, deltas, lr=1e-3, tol=1e-3, init=None, betas=(0.9, 0.999
 if r==0:
     G = nx.random_regular_graph(k, nq)
 
+    while not nx.is_connected(G):
+        G = nx.random_regular_graph(k, nq)
+
     triangles = [c for c in nx.enumerate_all_cliques(G) if len(c)==3]
     deltas = [len([t for t in triangles if u in t and v in t]) for u, v in G.edges()]
 
@@ -131,34 +134,20 @@ logpsi = RBM(n_visible=nq)
 for i, j in G.edges(): 
     logpsi.RZZ(i, j, phi=2*gamma)
 
+logpsi.fold_imag_params()
+
 alpha = 2.2
 logpsi.add_hidden_units(num=floor(alpha*logpsi.nv - logpsi.nh))
-
 logpsi.mask[:] = True
 
 data = {'gamma': gamma, 'beta': beta_opt}
 key_template = 'proc_{}#after_q{}#{}'
 
-save_folder = os.path.join(os.getcwd(), 'output_data_54q_p1_sweep')
-
-if not os.path.exists(save_folder):
-    try:
-        os.mkdir(save_folder)
-    except FileExistsError:
-        print('Output folder already exists, skipping mkdir on process {}...'.format(r))
-
-if r==0:
-    graph_save_path = os.path.join(save_folder, 'graph')
-    np.save(graph_save_path, nx.to_numpy_array(G, nodelist=sorted(G.nodes)))
-
-lr = 1e-1
-tol = 1e-3
-
 for n in range(nq):
     
     print('Qubit {} starting on process {}...'.format(n+1, r))
         
-    params, Fs = rx_optimization(logpsi, n, beta_opt, tol=tol, lr=lr, lookback=3, resample_phi=5, sigma=0.0,
+    params, Fs = rx_optimization(logpsi, n, beta_opt, tol=1e-3, lr=1e-1, lookback=5, resample_phi=5, sigma=0.0,
                                    psi_mcmc_params=(1500,4,500,54), phi_mcmc_params=(1500,4,500,54),
                                    eps=1e-5, verbose=False)
     
@@ -174,6 +163,18 @@ for n in range(nq):
     print('\nQubit {} done on process {}. Final fidelity estimate: {:05.4f}'.format(n+1, r, Fs[-1]))
 
 #### WRITING FILES ####
+
+save_folder = os.path.join(os.getcwd(), 'output_data_54q_p1_sweep')
+
+if not os.path.exists(save_folder):
+    try:
+        os.mkdir(save_folder)
+    except FileExistsError:
+        print('Output folder already exists, skipping mkdir on process {}...'.format(r))
+
+if r==0:
+    graph_save_path = os.path.join(save_folder, 'graph')
+    np.save(graph_save_path, nx.to_numpy_array(G, nodelist=sorted(G.nodes)))
 
 save_path = os.path.join(save_folder, 'process_{}_data'.format(r))
 np.savez(save_path, **data)
