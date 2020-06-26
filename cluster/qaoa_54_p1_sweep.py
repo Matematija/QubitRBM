@@ -1,5 +1,3 @@
-from mpi4py import MPI
-
 import numpy as np
 import sys, os
 import networkx as nx
@@ -9,6 +7,8 @@ sys.path.append(os.path.abspath('..'))
 
 from QubitRBM.optimize import *
 from QubitRBM.rbm import *
+
+from mpi4py import MPI
 
 comm = MPI.COMM_WORLD
 r = comm.Get_rank()
