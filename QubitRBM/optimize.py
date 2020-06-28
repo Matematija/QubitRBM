@@ -15,6 +15,8 @@ if libpath not in sys.path:
 from QubitRBM.rbm import RBM
 import QubitRBM.utils as utils
 
+from mpi4py import MPI
+
 @njit
 def _S_matrix(O):
     T = O.shape[0]
