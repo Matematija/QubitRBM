@@ -1,10 +1,8 @@
 import numpy as np
-from scipy import sparse
-from scipy.special import logsumexp, factorial
+from scipy.special import logsumexp
 from collections import OrderedDict
 
 from numba import njit
-
 import os, sys
 
 libpath = os.path.abspath('..')
