@@ -10,13 +10,18 @@ from QubitRBM.rbm import RBM
 
 r = sys.getenv('SLURM_ARRAY_TASK_ID')
 
+print('Slurm array task ID = {}'.format(r))
+
 nq = 54
 k = 3
 
 f = np.load('p1_opt_54_graph.npz')
 G = nx.from_numpy_array(f['graph'])
 beta_opt = f['beta'].item()
-gamma = np.linspace(0, np.pi/2, size)[r]
+gamma = np.linspace(0, np.pi/4, size)[r]
+
+print('Beta = {}'.format(beta))
+print('Gamma = {}'.format(gamma))
 
 logpsi = RBM(n_visible=nq)
 
@@ -26,7 +31,7 @@ for i, j in G.edges():
 logpsi.fold_imag_params()
 
 alpha = 2
-logpsi.add_hidden_units(num=floor(alpha*logpsi.nv) - logpsi.nh)
+logpsi.add_hidden_units(num=alpha*logpsi.nv - logpsi.nh)
 logpsi.mask[:] = True
 
 data = {'gamma': gamma, 'beta': beta_opt}
