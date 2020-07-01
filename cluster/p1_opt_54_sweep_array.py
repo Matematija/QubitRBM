@@ -15,10 +15,12 @@ print('Slurm array task ID = {}'.format(r))
 nq = 54
 k = 3
 
+N_JOBS = 10
+
 f = np.load('p1_opt_54_graph.npz')
 G = nx.from_numpy_array(f['graph'])
 beta_opt = f['beta'].item()
-gamma = np.linspace(0, np.pi/4, size)[r]
+gamma = np.linspace(0, np.pi/4, N_JOBS)[r]
 
 print('Beta = {}'.format(beta))
 print('Gamma = {}'.format(gamma))
