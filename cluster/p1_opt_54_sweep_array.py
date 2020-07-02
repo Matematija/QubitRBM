@@ -8,14 +8,19 @@ sys.path.append(os.path.abspath('..'))
 from QubitRBM.optimize import rx_optimization
 from QubitRBM.rbm import RBM
 
-r = sys.getenv('SLURM_ARRAY_TASK_ID')
+try:    
+    N_JOBS = os.getenv('SLURM_ARRAY_TASK_COUNT', 10)
+    print('Environment variable SLURM_ARRAY_TASK_COUNT = {}'.format(N_JOBS))
+except:
+    N_JOBS = 10
+
+r = os.environ.get('SLURM_ARRAY_TASK_ID')
+assert r is not None, 'Environment variable "SLURM_ARRAY_TASK_ID" not found!'
 
 print('Slurm array task ID = {}'.format(r))
 
 nq = 54
 k = 3
-
-N_JOBS = 10
 
 f = np.load('p1_opt_54_graph.npz')
 G = nx.from_numpy_array(f['graph'])
