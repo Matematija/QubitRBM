@@ -27,7 +27,7 @@ G = nx.from_numpy_array(f['graph'])
 beta_opt = f['beta'].item()
 gamma = np.linspace(0, np.pi/4, N_JOBS)[r]
 
-print('Beta = {}'.format(beta))
+print('Beta = {}'.format(beta_opt))
 print('Gamma = {}'.format(gamma))
 
 logpsi = RBM(n_visible=nq)
