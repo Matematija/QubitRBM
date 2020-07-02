@@ -9,12 +9,12 @@ from QubitRBM.optimize import rx_optimization
 from QubitRBM.rbm import RBM
 
 try:    
-    N_JOBS = os.getenv('SLURM_ARRAY_TASK_COUNT', 10)
+    N_JOBS = int(os.getenv('SLURM_ARRAY_TASK_COUNT', 10))
     print('Environment variable SLURM_ARRAY_TASK_COUNT = {}'.format(N_JOBS))
 except:
     N_JOBS = 10
 
-r = os.environ.get('SLURM_ARRAY_TASK_ID')
+r = int(os.environ.get('SLURM_ARRAY_TASK_ID'))
 assert r is not None, 'Environment variable "SLURM_ARRAY_TASK_ID" not found!'
 
 print('Slurm array task ID = {}'.format(r))
