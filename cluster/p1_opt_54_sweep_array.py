@@ -68,3 +68,8 @@ if not os.path.exists(save_folder):
 
 save_path = os.path.join(save_folder, 'process_{}_data'.format(r))
 np.savez(save_path, **data)
+
+# Verifying the cost:
+final_samples = logpsi.get_samples(n_steps=10000, warmup=5000, step=54, n_chains=5)
+costs = (-1)**B[:, G.edges()].prod(axis=-1).sum(axis=-1)
+print('Final cost estimate: {}'.format(costs.mean()))
