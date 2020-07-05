@@ -24,7 +24,14 @@ k = 3
 
 f = np.load('p1_opt_54_graph.npz')
 G = nx.from_numpy_array(f['graph'])
+
 beta_opt = f['beta'].item()
+gamma_opt = f['gamma'].item()
+
+print('Oprimal values for the graph:\n')
+print('gamma_opt =', gamma_opt)
+print('beta_opt =', beta_opt)
+
 gamma = np.linspace(0, np.pi/4, N_JOBS)[r]
 
 print('Beta = {}'.format(beta_opt))
@@ -49,8 +56,7 @@ for n in range(nq):
     print('Qubit {} starting on process {}...'.format(n+1, r))
         
     params, Fs = rx_optimization(rbm=logpsi, n=n, beta=beta_opt, tol=1e-3, lr=1e-1, lookback=5, resample_phi=5, sigma=0.0,
-                                   psi_mcmc_params=(2000,4,500,54), phi_mcmc_params=(2000,4,500,54),
-                                   eps=1e-1, verbose=True)
+                                   psi_mcmc_params=(2000,4,500,54), phi_mcmc_params=(2000,4,500,54), eps=1e-2, verbose=True)
     
     logpsi.params = params
     logpsi.fold_imag_params()
@@ -71,5 +77,5 @@ np.savez(save_path, **data)
 
 # Verifying the cost:
 final_samples = logpsi.get_samples(n_steps=10000, warmup=5000, step=54, n_chains=5)
-costs = (-1)**B[:, G.edges()].prod(axis=-1).sum(axis=-1)
+costs = ((-1)**final_samples[:, G.edges()]).prod(axis=-1).sum(axis=-1)
 print('Final cost estimate: {}'.format(costs.mean()))
