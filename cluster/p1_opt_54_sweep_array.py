@@ -56,7 +56,7 @@ for n in range(nq):
     print('Qubit {} starting on process {}...'.format(n+1, r))
         
     params, Fs = rx_optimization(rbm=logpsi, n=n, beta=beta_opt, tol=1e-3, lr=1e-1, lookback=5, resample_phi=5, sigma=0.0,
-                                   psi_mcmc_params=(2000,4,500,54), phi_mcmc_params=(2000,4,500,54), eps=1e-2, verbose=True)
+                                   psi_mcmc_params=(2000,4,500,54), phi_mcmc_params=(2000,4,500,54), eps=1e-3, verbose=True)
     
     logpsi.params = params
     logpsi.fold_imag_params()
