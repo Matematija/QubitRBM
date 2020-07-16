@@ -45,6 +45,8 @@ np.savez('p4_54q.npz', **data)
 
 logpsi = RBM(n_visible=nq)
 
+print('Beginning optimizations...')
+
 for i in range(p):
 
     print('Applying UC at p={}...'.format(i+1))
