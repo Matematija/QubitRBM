@@ -53,9 +53,9 @@ class RBM:
 
     @params.setter
     def params(self, params):
-        self.a = params[:self.nv]
-        self.b = params[self.nv:(self.nv + self.nh)]
-        self.W[self.mask] = params[(self.nv + self.nh):]
+        self.a = params[:self.nv].copy()
+        self.b = params[self.nv:(self.nv + self.nh)].copy()
+        self.W[self.mask] = params[(self.nv + self.nh):].copy()
 
     @property
     def state_dict(self):
@@ -64,6 +64,10 @@ class RBM:
     @property
     def num_free_params(self):
         return self.nv + self.nh + self.mask.sum()
+
+    @property
+    def alpha(self):
+        return self.nh/self.nv
 
     def set_params(self, C=None, a=None, b=None, W=None, mask=None):
 
@@ -112,64 +116,6 @@ class RBM:
         self.a = utils.fold_imag(self.a)
         self.b = utils.fold_imag(self.b)
         self.W = utils.fold_imag(self.W)
-    
-    # def iter_samples(self, n_steps, state=None, init=None, n_chains=1, warmup=0, step=1, T=1.0, n=None, beta=None, verbose=False):
-        
-    #     if init is None:
-    #         samples = (np.random.rand(n_chains, self.nv) < 0.5).astype(complex)
-    #     else:
-    #         samples = np.atleast_2d(init).astype(complex)
-
-    #     C, a, b, W = self.C, self.a, self.b, self.W
-
-    #     if state is None:
-    #         log_prob_old = 2*self.__eval_from_params(samples, C, a, b, W).real
-    #     elif state.lower() == 'rx':
-    #         CX, aX, bX, WX = self.__get_X_params(n)
-    #         log_prob_old = 2*self.__eval_RX_from_params(samples, C, a, b, W, CX, aX, bX, WX, beta).real
-    #     # elif state.lower() == 'h':
-    #     #     log_prob_old = np.atleast_1d(2*self.eval_H(samples, *args, **kwargs).real)
-    #     # elif state.lower() == 'ub':
-    #     #     log_prob_old = np.atleast_1d(2*self.eval_UB(samples, *args, **kwargs).real)
-    #     else:
-    #         raise KeyError('Invalid "state": {}'.format(state))
-
-    #     accept_counter = np.zeros(n_chains, dtype=int)
-    #     out = np.empty(shape=(n_steps, n_chains, self.nv), dtype=complex)
-    #     sample_counter = 0
-        
-    #     for t in range(warmup + step*n_steps):
-
-    #         i = np.random.randint(low=0, high=self.nv, size=n_chains)
-            
-    #         proposal = samples.copy()
-    #         proposal[:,i] = 1.0 - proposal[:,i]
-            
-    #         if state is None:
-    #             log_prob_new = 2*self.__eval_from_params(proposal, C, a, b, W).real
-    #         elif state.lower() == 'rx':
-    #             log_prob_new = 2*self.__eval_RX_from_params(proposal, C, a, b, W, CX, aX, bX, WX, beta).real
-    #         # elif state.lower() == 'h':
-    #         #     log_prob_new = np.atleast_1d(2*self.eval_H(proposal, *args, **kwargs).real)
-    #         # elif state.lower() == 'ub':
-    #         #     log_prob_new = np.atleast_1d(2*self.eval_UB(proposal, *args, **kwargs).real)
-            
-    #         logA = (log_prob_new - log_prob_old)/T
-    #         accepted = logA >= np.log(np.random.rand(n_chains))
-
-    #         samples[accepted,:] = proposal[accepted,:].copy()
-
-    #         accept_counter += accepted
-
-    #         if t >= warmup and (t-warmup)%step == 0:
-    #             # yield samples
-    #             out[sample_counter,:,:] = samples
-    #             sample_counter += 1
-
-    #         log_prob_old[accepted] = log_prob_new[accepted].copy()
-        
-    #     if verbose:
-    #         print("Mean acceptance ratio: ", np.mean(accept_counter)/(n_steps*step))
 
     def iter_samples(self, n_steps, state=None, init=None, n_chains=1, warmup=0, step=1, T=1.0, verbose=False, n=None, beta=None):
         
@@ -444,7 +390,7 @@ class RBM:
         
     def RZZ(self, k, l, phi):
 
-        self.add_hidden_units(num=1, mask=True)
+        self.add_hidden_units(num=1, mask=False)
         self.mask[[k,l], -1] = True
 
         B = np.arccosh(np.exp(1j*phi))
@@ -458,7 +404,7 @@ class RBM:
 
     def CRZ(self, k, l, phi):
 
-        self.add_hidden_units(num=1, mask=True)
+        self.add_hidden_units(num=1, mask=False)
         self.mask[[k,l], -1] = True
 
         A = np.arccosh(np.exp(-1j*phi/2))

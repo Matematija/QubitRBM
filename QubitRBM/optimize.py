@@ -298,13 +298,9 @@ def compress_rbm(rbm, target_hidden_num, init, tol=1e-6, lookback=50, max_iters=
         history.append(F)
 
         O = logpsi.grad_log(psi_samples)
-        grad = _grad_log_F(O, F, psipsi, phipsi)
+        grad_logF = _grad_log_F(O, F, psipsi, phipsi)
         S = _S_matrix(O)
-
-        ratio_psi = np.exp(phipsi - psipsi)
-        ratio_psi_mean = ratio_psi.mean()
-
-        grad_logF = O.mean(axis=0).conj() - (ratio_psi.reshape(-1,1)*O.conj()).mean(axis=0)/ratio_psi_mean
+        
         grad = F*grad_logF
 
         S[np.diag_indices_from(S)] += eps 
