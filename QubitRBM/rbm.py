@@ -355,10 +355,6 @@ class RBM:
         """
         self.a[n] += 1j*phi
 
-    def P(self, n, phi):
-        self.X(n)
-        self.RZ(n, phi)
-
     def add_hidden_units(self, num, b_=None, W_=None, mask=False):
 
         if b_ is None: 
@@ -388,9 +384,9 @@ class RBM:
 
         self.mask = np.concatenate([self.mask, m], axis=1)
         
-    def RZZ(self, k, l, phi):
+    def RZZ(self, k, l, phi, mask=True):
 
-        self.add_hidden_units(num=1, mask=False)
+        self.add_hidden_units(num=1, mask=mask)
         self.mask[[k,l], -1] = True
 
         B = np.arccosh(np.exp(1j*phi))
@@ -402,9 +398,13 @@ class RBM:
         # self.C += np.log(2) - 1j*phi/2
         self.C -= np.log(2)
 
-    def CRZ(self, k, l, phi):
+    def UC(self, graph, gamma, mask=True):
+        for u, v in graph.edges():
+            self.RZZ(u, v, 2*gamma, mask=mask)
 
-        self.add_hidden_units(num=1, mask=False)
+    def CRZ(self, k, l, phi, mask=True):
+
+        self.add_hidden_units(num=1, mask=mask)
         self.mask[[k,l], -1] = True
 
         A = np.arccosh(np.exp(-1j*phi/2))
