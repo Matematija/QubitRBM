@@ -4,8 +4,7 @@ import networkx as nx
 import os, sys
 from time import time
 
-import cirq
-import sympy
+import sympy, cirq
     
 libpath = os.path.abspath('..')
 if libpath not in sys.path:
@@ -246,7 +245,7 @@ class QAOA:
             history.append(f)
 
             if time() - clock > 10 and verbose:
-                print('Iteration {} | Cost = {}'.format(t, f))
+                print('Iteration {:3d} | Cost = {:05.4f}'.format(t, f))
                 clock = time()
 
         return params, np.array(history)

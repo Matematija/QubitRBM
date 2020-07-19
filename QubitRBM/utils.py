@@ -35,13 +35,7 @@ def logaddexp(x, y, b=(1.0, 1.0)):
     return m + np.log(b[0]*np.exp(x-m) + b[1]*np.exp(y-m))
 
 def fold_imag(z):
-    if z.size > 1:
-        cond = np.abs(z.imag) > np.pi
-        new_imag = z.imag.copy()
-        new_imag[cond] = ((new_imag[cond] + np.pi)%(2*np.pi) - np.pi)
-        return z.real + 1j*new_imag
-    else:
-        return z.real + 1j*((z.imag + np.pi)%(2*np.pi) - np.pi)
+    return np.real(z) + 1j*((np.imag(z) + np.pi)%(2*np.pi) - np.pi)
 
 def exact_fidelity(psi, phi):
     return np.abs(np.vdot(psi, phi))**2
