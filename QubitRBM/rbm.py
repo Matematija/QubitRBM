@@ -32,70 +32,27 @@ class RBM:
     
     def __init__(self, n_visible, n_hidden=1):
         
-        self.nv = n_visible
-        self.nh = n_hidden
+        self.__nv = int(n_visible)
+        self.__nh = int(n_hidden)
         
         self.W = np.zeros([self.nv, self.nh], dtype=complex)
         self.a = np.zeros(self.nv, dtype=complex)
         self.b = np.zeros(self.nh, dtype=complex)
+        self.C = -(self.nh + self.nv/2)*np.log(2)
 
         self.mask = np.ones(shape=self.W.shape, dtype=np.bool)
-
-        self.C = -(self.nh + self.nv/2)*np.log(2)
-        self.num_extra_hs = 0
 
         self.__eval_from_params = _eval_RBM_from_params
         self.__eval_RX_from_params = _eval_RX_RBM_from_params
 
-    @property
-    def params(self):
-        return np.concatenate([self.a, self.b, self.W[self.mask]], axis=0)
+    def __repr__(self):
+        lines = []
+        lines.append('Qubit RBM with:')
+        lines.append('\t{} visible units, {} hidden units'.format(self.nv, self.nh))
+        lines.append('\t{} free parameters out of {} in total'.format(self.n_free_par, self.n_par))
 
-    @params.setter
-    def params(self, params):
-        self.a = params[:self.nv].copy()
-        self.b = params[self.nv:(self.nv + self.nh)].copy()
-        self.W[self.mask] = params[(self.nv + self.nh):].copy()
+        return '\n'.join(lines)
 
-    @property
-    def state_dict(self):
-        return OrderedDict(zip(['a', 'b', 'W'], [self.a, self.b. self.W]))
-
-    @property
-    def num_free_params(self):
-        return self.nv + self.nh + self.mask.sum()
-
-    @property
-    def alpha(self):
-        return self.nh/self.nv
-
-    def set_params(self, C=None, a=None, b=None, W=None, mask=None):
-
-        if C is not None:
-            self.C = C
-        if a is not None:
-            self.a = a
-        if b is not None:
-            self.b = b
-
-        if W is not None:
-            self.nv, self.nh = W.shape
-            self.W = W
-        else:
-            if a is not None:
-                self.nv = len(a)
-            if b is not None:
-                self.nh = len(b)
-
-        if mask is not None:
-            self.mask = mask
-        if self.mask.shape != self.W.shape:
-            self.mask = np.ones_like(self.W, dtype=np.bool)
-
-    def rand_init_params(self, sigma=0.1, add=False):
-        noise = sigma*(np.random.randn(self.num_free_params) + 1j*np.random.randn(self.num_free_params)) 
-        self.params = self.params + noise if not add else noise
-        
     def __call__(self, configs, fold=True, squeeze=True):
 
         """
@@ -110,12 +67,131 @@ class RBM:
         
         # return logpsi if logpsi.size > 1 else logpsi.item() if squeeze else logpsi
         return logpsi
+
+    @property
+    def nv(self):
+        """
+        The number of visible units in the RBM.
+        """
+        return self.__nv
+    
+    @property
+    def nh(self):
+        """
+        The number of hidden units in the RBM.
+        """
+        return self.__nh
+
+    @property
+    def C(self):
+        """
+        The log of the numerical prefactor for wavefunction evaluation.
+        """
+        return self.__C
+
+    @C.setter
+    def C(self, C):
+        self.__C = complex(C)
+
+    @property
+    def a(self):
+        """
+        The visible biases of the RBM.
+        """
+        return self.__a
+    
+    @a.setter
+    def a(self, a):
+        self.__a = np.asarray_chkfinite(a, dtype=complex).reshape(self.nv)
+    
+    @property
+    def b(self):
+        """
+        The hidden biases of the RBM.
+        """
+        return self.__b
+    
+    @b.setter
+    def b(self, b):
+        self.__b = np.asarray_chkfinite(b, dtype=complex).reshape(self.nh)
+
+    @property
+    def W(self):
+        """
+        The weight matrix of the RBM.
+        """
+        return self.__W
+
+    @W.setter
+    def W(self, W):
+        self.__W = np.asarray_chkfinite(W, dtype=complex).reshape(self.nv, self.nh)
+
+    @property
+    def mask(self):
+        """
+        A boolean matrix of the same shape as RBM.W indicating which parameters are being optimized over.
+        """
+        return self.__mask
+
+    @mask.setter
+    def mask(self, mask):
+        self.__mask = np.asarray_chkfinite(mask, dtype=bool).reshape(self.nv, self.nh)
+
+    @property
+    def params(self):
+        """
+        A convenience property containing all parameters. RBM.params = [a, b, W.reshape(-1)]
+        """
+        return np.concatenate([self.a, self.b, self.W[self.mask]], axis=0)
+
+    @params.setter
+    def params(self, params):
+        assert len(params) == self.n_free_par, 'Invalid number of parameters given.'
+        self.a = params[:self.nv].copy()
+        self.b = params[self.nv:(self.nv + self.nh)].copy()
+        self.W[self.mask] = params[(self.nv + self.nh):].copy()
+
+    @property
+    def state_dict(self):
+        return OrderedDict(zip(['C', 'a', 'b', 'W'], [self.C, self.a, self.b, self.W]))
+
+    @state_dict.setter
+    def state_dict(self, sd):
+
+        a = np.asarray_chkfinite(sd['a'], dtype=complex).reshape(self.nv)
+        b = np.asarray_chkfinite(sd['b'], dtype=complex).reshape(-1)
+        W = np.asarray_chkfinite(sd['W'], dtype=complex).reshape(self.nv, -1)
+
+        assert len(a) == W.shape[1], 'Inconsistent number of hidden units.'
+
+        self.__a, self.__b, self.__W = a, b, W
+        self.__nv, self.__nh = W.shape
+
+        if 'mask' in sd.keys():
+            self.mask = sd['mask']
+        else:
+            self.__mask = np.ones_like(W, dtype=bool)
+
+        if 'C' in sd.keys():
+            self.C = sd['C']
+        else:
+            self.C = -(self.nh + self.nv/2)*np.log(2)
+
+    @property
+    def n_free_par(self):
+        return self.nv + self.nh + self.mask.sum()
+
+    @property
+    def n_par(self):
+        return self.nv + self.nh + self.nv*self.nh
+
+    @property
+    def alpha(self):
+        return self.nh/self.nv
             
     def fold_imag_params(self):
         self.C = utils.fold_imag(self.C)
-        self.a = utils.fold_imag(self.a)
-        self.b = utils.fold_imag(self.b)
-        self.W = utils.fold_imag(self.W)
+        self.params = utils.fold_imag(self.params)
 
     def iter_samples(self, n_steps, state=None, init=None, n_chains=1, warmup=0, step=1, T=1.0, verbose=False, n=None, beta=None):
         
@@ -356,6 +432,8 @@ class RBM:
         self.a[n] += 1j*phi
 
     def add_hidden_units(self, num, b_=None, W_=None, mask=False):
+        
+        mask_old = self.mask
 
         if b_ is None: 
             b_ = np.zeros(shape=[num], dtype=complex) 
@@ -367,22 +445,21 @@ class RBM:
 
         b[:-num] = self.b
         b[-num:] = b_
-        self.b = b
+        self.__b = b
 
         W[:,:-num] = self.W
         W[:,-num:] = W_
-        self.W = W
+        self.__W = W
         self.C -= np.log(2)
 
-        self.num_extra_hs += num
-        self.nh += num
+        self.__nh += num
 
         if mask:
             m = np.zeros(shape=[self.nv, num], dtype=np.bool)
         else:
             m = np.ones(shape=[self.nv, num], dtype=np.bool)
 
-        self.mask = np.concatenate([self.mask, m], axis=1)
+        self.__mask = np.concatenate([self.__mask, m], axis=1)
         
     def RZZ(self, k, l, phi, mask=True):
 
@@ -416,13 +493,9 @@ class RBM:
         self.C -= np.log(2)
 
     def save(self, path, **kwargs):
-        np.savez(path, C=self.C, a=self.a, b=self.b, W=self.W, mask=self.mask, **kwargs)
+        np.savez(path, **self.state_dict, mask=self.mask, **kwargs)
 
     def load(self, path):
-
-        f = np.load(path)
-
-        C, a, b, W, mask = f['C'].copy(), f['a'].copy(), f['b'].copy(), f['W'].copy(), f['mask'].copy()
-        self.set_params(C=C, a=a, b=b, W=W, mask=mask)
-
-        return f
+        sd = OrderedDict(np.load(path))
+        self.state_dict = sd
+        return sd
