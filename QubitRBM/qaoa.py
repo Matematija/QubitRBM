@@ -200,7 +200,7 @@ class QAOA:
             beta = np.random.uniform(-np.pi/4, np.pi/4, size=self.p)
             params = np.concatenate([gamma, beta])
         else:
-            params = np.array(init).copy()
+            params = np.asarray_chkfinite(init, dtype=float)
 
         if hilbert is None and self.p > 1:
             hilbert = np.array(list(utils.hilbert_iter(self.n_qubits)))
