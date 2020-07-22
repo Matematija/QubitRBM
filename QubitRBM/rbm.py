@@ -146,12 +146,10 @@ class RBM:
 
     @params.setter
     def params(self, params):
-        p = np.asarray_chkfinite(params, dtype=complex).reshape(-1)
-        assert len(p) == self.n_free_par, 'Invalid number of parameters given. {} expected, got {}.'.format(len(p), self.n_free_par)
-
-        self.a = p[:self.nv].copy()
-        self.b = p[self.nv:(self.nv + self.nh)].copy()
-        self.W[self.mask] = p[(self.nv + self.nh):].copy()
+        assert len(params) == self.n_free_par, 'Invalid number of parameters given. {} expected, got {}.'.format(len(params), self.n_free_par)
+        self.a = params[:self.nv].copy()
+        self.b = params[self.nv:(self.nv + self.nh)].copy()
+        self.W[self.mask] = params[(self.nv + self.nh):].copy()
 
     @property
     def state_dict(self):
