@@ -2,6 +2,7 @@ import numpy as np
 import sys, os
 import networkx as nx
 from collections import OrderedDict
+from copy import deepcopy
 
 sys.path.append(os.path.abspath('..'))
 
@@ -15,49 +16,29 @@ k = 3
 nq = 54
 mcmc_params = OrderedDict(zip(['n_steps', 'n_chains', 'warmup', 'step'], [2000, 4, 500, nq]))
 
-data = OrderedDict()
+data = OrderedDict(np.load('p4_54q.npz'))
 
-G20 = nx.random_regular_graph(k, 20)
-while not nx.is_connected(G20):
-    G20 = nx.random_regular_graph(k, 20)
+G = nx.from_numpy_array(data['graph'])
+gammas = data['gammas']
+betas = data['betas']
 
-qaoa20 = QAOA(G20, p=4)
-data['graph_20'] = nx.to_numpy_array(G20, nodelist=sorted(G20.nodes))
+logpsi = RBM(n_visible=nq, n_hidden=k*nq//2 +1)
+logpsi.params = data['params_after_p2_compression'].copy()
 
-print('\nStarting QAOA optimization for the 20 qubit graph...\n')
-par, his = qaoa20.optimize(init=[np.pi/8]*p + [0]*p, tol=1e-3)
-print('QAOA optimization done. Final cost: {}'.format(his[-1]))
-
-gammas, betas = np.split(par, 2)
-data['gammas'] = gammas
-data['betas'] = betas
-
-print('Gammas: ', gammas)
-print('Betas: ', betas)
-
-G = nx.random_regular_graph(k, nq)
-while not nx.is_connected(G):
-    G = nx.random_regular_graph(k, nq)
-
-data['graph'] = nx.to_numpy_array(G, nodelist=sorted(G.nodes))
-
-np.savez('p4_54q.npz', **data)
-
-logpsi = RBM(n_visible=nq)
 optim = Optimizer(logpsi, **mcmc_params)
 
 print('Beginning optimizations...')
 
-for i in range(p):
+for i in [1,2,3]:
 
-    print('Applying UC at p={}...'.format(i+1))
+    if i in [2, 3]:
 
-    logpsi.UC(G, gammas[i], mask=False)
-    logpsi.mask[:] = True
+        print('Applying UC at p={}...'.format(i+1))
 
-    data['params_after_p{}_UC'.format(i+1)] = logpsi.params
+        logpsi.UC(G, gammas[i], mask=False)
+        logpsi.mask[:] = True
 
-    if i > 0:
+        data['params_after_p{}_UC'.format(i+1)] = logpsi.params
 
         print('Starting compression at p={}...'.format(i+1))
 
