@@ -142,7 +142,7 @@ class Optimizer:
                     phiphi = self.machine.eval_RX(phi_samples, n=n, beta=beta)
             
             if time() - clock > 10 and verbose:
-                print(self.__printout_template.format(t, F, lr, diff_mean_F))
+                print(self.__printout_template.format(t, F, lr_, diff_mean_F))
                 clock = time()
 
         return params, history
@@ -200,7 +200,7 @@ class Optimizer:
                     phiphi = self.machine(phi_samples)
 
             if time() - clock > 10 and verbose:
-                print(self.__printout_template.format(t, F, lr, diff_mean_F))
+                print(self.__printout_template.format(t, F, lr_, diff_mean_F))
                 clock = time()
 
         return logpsi, history

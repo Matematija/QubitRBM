@@ -146,7 +146,7 @@ class RBM:
 
     @params.setter
     def params(self, params):
-        assert len(params) == self.n_free_par, 'Invalid number of parameters given. {} expected, got {}.'.format(len(params), self.n_free_par)
+        assert len(params) == self.n_free_par, 'Invalid number of parameters given. {} expected, got {}.'.format(self.n_free_par, len(params))
         self.a = params[:self.nv].copy()
         self.b = params[self.nv:(self.nv + self.nh)].copy()
         self.W[self.mask] = params[(self.nv + self.nh):].copy()
