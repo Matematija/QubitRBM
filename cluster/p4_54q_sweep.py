@@ -87,8 +87,9 @@ for n in range(nq):
     
     logpsi.params = params
     logpsi.fold_imag_params()
+    optim.machine = logpsi
     
-    data['params_after_q{}_p4'.format(n+1)]
+    data['params_after_q{}_p4'.format(n+1)] = logpsi.params
     data[key_template.format(r, n+1, 'Fs')] = Fs.copy()
 
 save_folder = os.path.join(os.getcwd(), 'output_data_54q_p1_sweep')
