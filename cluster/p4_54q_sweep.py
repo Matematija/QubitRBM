@@ -59,7 +59,7 @@ key_template = 'proc_{}#after_q{}#{}'
 print('Beginning compression...')
 
 aux = RBM(n_visible=nq)
-aux.UC(G, gammas[:i+1].sum(), mask=False)
+aux.UC(graph=graph, gamma=gammas.sum(), mask=False)
 aux.mask[:] = True
 init = aux.params.copy()
 
