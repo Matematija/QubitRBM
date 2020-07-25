@@ -25,7 +25,7 @@ k = 3
 
 print('Reading the file...')
 
-f = np.load('p4_54q_after_p3')
+f = np.load('p4_54q_after_p3.npz')
 
 params = f['params'].copy()
 graph = nx.from_numpy_array(f['graph'])
