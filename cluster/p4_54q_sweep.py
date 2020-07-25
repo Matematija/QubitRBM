@@ -29,8 +29,8 @@ f = np.load('p4_54q_after_p3.npz')
 
 params = f['params'].copy()
 graph = nx.from_numpy_array(f['graph'])
-betas = f['betas'].copy().item()
-gammas = f['gammas'].copy().item()
+betas = f['betas'].copy()
+gammas = f['gammas'].copy()
 beta_opt = betas[-1]
 gamma_opt = gammas[-1]
 
