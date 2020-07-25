@@ -70,7 +70,7 @@ lr_tau = tau_steps/np.log(lri/lrf)
 lr_min = lrf
 
 logpsi_, Fs = optim.sr_compress(init=init, tol=1e-3, lookback=5, max_iters=1000, resample_phi=5, 
-                                    r=lri, lr_tau=lr_tau, lr_min=lrf, eps=1e-4, verbose=True)
+                                    lr=lri, lr_tau=lr_tau, lr_min=lrf, eps=1e-4, verbose=True)
 logpsi_.fold_imag_params()
 
 logpsi = deepcopy(logpsi_)
