@@ -13,8 +13,8 @@ libpath = os.path.abspath('..')
 if libpath not in sys.path:
     sys.path.append(libpath)
 
-from QubitRBM.rbm import RBM
-import QubitRBM.utils as utils
+from qubitrbm.rbm import RBM
+import qubitrbm.utils as utils
 
 class Optimizer:
     

@@ -9,8 +9,8 @@ libpath = os.path.abspath('..')
 if libpath not in sys.path:
     sys.path.append(libpath)
 
-import QubitRBM.utils as utils
-from QubitRBM.utils import log1pexp, logaddexp
+import qubitrbm.utils as utils
+from qubitrbm.utils import log1pexp, logaddexp
 
 @njit
 def _eval_RBM_from_params(B, C, a, b, W):

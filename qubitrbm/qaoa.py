@@ -10,7 +10,7 @@ libpath = os.path.abspath('..')
 if libpath not in sys.path:
     sys.path.append(libpath)
 
-import QubitRBM.utils as utils
+import qubitrbm.utils as utils
 
 class QAOA:
     
