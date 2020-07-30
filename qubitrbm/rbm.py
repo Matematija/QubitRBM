@@ -162,7 +162,7 @@ class RBM:
         b = np.asarray_chkfinite(sd['b'], dtype=complex).reshape(-1)
         W = np.asarray_chkfinite(sd['W'], dtype=complex).reshape(self.nv, -1)
 
-        assert len(a) == W.shape[1], 'Inconsistent number of hidden units.'
+        assert len(b) == W.shape[1], 'Inconsistent number of hidden units.'
 
         self.__a, self.__b, self.__W = a, b, W
         self.__nv, self.__nh = W.shape
