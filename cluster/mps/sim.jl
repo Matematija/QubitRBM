@@ -7,8 +7,8 @@ using NPZ
 
 import PastaQ: gate
 
-angles_path = "./angles_p1_N20.txt"
-edgelist_path = "./edgelist_p1_N20.txt" 
+angles_path = "./angles_p2_N20.txt"
+edgelist_path = "./edgelist_p2_N20.txt" 
 
 angles = readdlm(angles_path, ',', Float64)[:,1];
 # g = SimpleGraph(loadgraph(edgelist_path, "graph_key", EdgeListFormat()))
