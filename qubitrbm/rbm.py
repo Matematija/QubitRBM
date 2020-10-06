@@ -9,8 +9,8 @@ libpath = os.path.abspath('..')
 if libpath not in sys.path:
     sys.path.append(libpath)
 
-import QubitRBM.utils as utils
-from QubitRBM.utils import log1pexp, logaddexp
+import qubitrbm.utils as utils
+from qubitrbm.utils import log1pexp, logaddexp
 
 @njit
 def _eval_RBM_from_params(B, C, a, b, W):
@@ -162,7 +162,7 @@ class RBM:
         b = np.asarray_chkfinite(sd['b'], dtype=complex).reshape(-1)
         W = np.asarray_chkfinite(sd['W'], dtype=complex).reshape(self.nv, -1)
 
-        assert len(a) == W.shape[1], 'Inconsistent number of hidden units.'
+        assert len(b) == W.shape[1], 'Inconsistent number of hidden units.'
 
         self.__a, self.__b, self.__W = a, b, W
         self.__nv, self.__nh = W.shape
