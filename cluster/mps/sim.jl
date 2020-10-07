@@ -1,14 +1,14 @@
 using PastaQ
 using ITensors
 using LightGraphs
-using GraphIO
+# using GraphIO
 using DelimitedFiles
 using NPZ
 
 import PastaQ: gate
 
-angles_path = "./angles_p2_N20.txt"
-edgelist_path = "./edgelist_p2_N20.txt" 
+angles_path = length(ARGS) > 1 ? ARGS[2] : "./angles_p2_N20.txt"
+edgelist_path = length(ARGS) > 2 ? ARGS[3] : "./edgelist_p2_N20.txt" 
 
 angles = readdlm(angles_path, ',', Float64)[:,1];
 # g = SimpleGraph(loadgraph(edgelist_path, "graph_key", EdgeListFormat()))
@@ -16,7 +16,7 @@ angles = readdlm(angles_path, ',', Float64)[:,1];
 ####################################################################################
 
 # N = length(vertices(g)); # qubits
-N = 54
+N = parse(Int, ARGS[1])
 p = length(angles)÷2;
 k = 3;
 
@@ -46,6 +46,8 @@ println("betas: ", βs)
 println("PROC: ", PROC)
 println("DIM: ", DIM)
 
+flush(stdout)
+
 ####################################################################################
 
 function cost(samples::Array{T,2}, edgelist::Array{Tuple{Int64,Int64},1}) where {T <: Number}
@@ -69,6 +71,7 @@ function mean(arr::Array{T,N}, dims::Int64) where {T,N}
 end
 
 println("Defining the circuit...")
+flush(stdout)
 
 gate(::GateName"RZZ"; ϕ::Number) =
   [     1           0          0         0
@@ -89,9 +92,11 @@ for layer in 2:p
 end
 
 println("Calculating the MPS state...")
-@time ψ = runcircuit(N, gates, maxdim=MAXDIM)
+flush(stdout)
+@time ψ = runcircuit(N, gates, maxdim=DIM)
 
 println("Sampling the MPS state...")
+flush(stdout)
 @time samples = getsamples(ψ, NSAMPLES);
 
 normalize!(ψ)
@@ -101,6 +106,7 @@ costs = cost(samples, edgelist);
 filename = "data_"*string(PROC)*".npz"
 
 println("Saving the output file to ", filename)
+flush(stdout)
 npzwrite(filename, Dict("samples" => samples,
                         "costs" => costs,
                         "mps_dim" => DIM,
@@ -108,4 +114,5 @@ npzwrite(filename, Dict("samples" => samples,
                         "betas" => βs,
                         "edgelist" => hcat([[u,v] for (u,v) in edgelist]...)))
 
-println("Mean cost: ", mean(costs));
+println("Mean cost: ", mean(costs))
+flush(stdout)
