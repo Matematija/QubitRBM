@@ -95,11 +95,11 @@ println("Calculating the MPS state...")
 flush(stdout)
 @time ψ = runcircuit(N, gates, maxdim=DIM)
 
+normalize!(ψ)
+
 println("Sampling the MPS state...")
 flush(stdout)
 @time samples = getsamples(ψ, NSAMPLES);
-
-normalize!(ψ)
 
 costs = cost(samples, edgelist);
 
