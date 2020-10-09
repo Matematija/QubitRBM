@@ -1,30 +1,30 @@
 using PastaQ
 using ITensors
 using LightGraphs
-# using GraphIO
+using GraphIO
 using DelimitedFiles
 using NPZ
 
 import PastaQ: gate
 
-angles_path = length(ARGS) > 1 ? ARGS[2] : "./angles_p2_N20.txt"
-edgelist_path = length(ARGS) > 2 ? ARGS[3] : "./edgelist_p2_N20.txt" 
+edgelist_path = ARGS[1]
+angles_path = ARGS[2]
 
 angles = readdlm(angles_path, ',', Float64)[:,1];
-# g = SimpleGraph(loadgraph(edgelist_path, "graph_key", EdgeListFormat()))
+g = SimpleGraph(loadgraph(edgelist_path, "graph_key", EdgeListFormat()))
 
 ####################################################################################
 
-# N = length(vertices(g)); # qubits
-N = parse(Int, ARGS[1])
+N = length(vertices(g)); # qubits
+# N = parse(Int, ARGS[1])
 p = length(angles)÷2;
-k = 3;
+k = degree(g)[1];
 
-g = random_regular_graph(N, k)
+# g = random_regular_graph(N, k)
 
 NDIMS = parse(Int, ENV["SLURM_ARRAY_TASK_COUNT"])
 PROC = parse(Int, ENV["SLURM_ARRAY_TASK_ID"])
-MAXDIM = 10000;
+MAXDIM = 5000;
 MINDIM = 50;
 DIM = MINDIM + PROC*((MAXDIM-MINDIM)÷NDIMS)
 # DIMS = [floor(Int, d) for d in range(MINDIM, MAXDIM, length=NDIMS)]
