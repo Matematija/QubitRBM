@@ -24,7 +24,7 @@ k = degree(g)[1];
 
 NDIMS = parse(Int, ENV["SLURM_ARRAY_TASK_COUNT"])
 PROC = parse(Int, ENV["SLURM_ARRAY_TASK_ID"])
-MAXDIM = 5000;
+MAXDIM = 2700;
 MINDIM = 50;
 DIM = MINDIM + PROC*((MAXDIM-MINDIM)÷NDIMS)
 # DIMS = [floor(Int, d) for d in range(MINDIM, MAXDIM, length=NDIMS)]
