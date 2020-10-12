@@ -33,7 +33,7 @@ PROC = int(os.environ["SLURM_ARRAY_TASK_ID"])
 MAXDIM = 2700
 MINDIM = 50
 DIM = MINDIM + PROC*((MAXDIM-MINDIM)//NDIMS)
-NSAMPLES = 2000
+NSAMPLES = 20000
 
 print(f'Read in QAOA angle data from {angles_path}')
 print(f'Gammas = {gammas}')
