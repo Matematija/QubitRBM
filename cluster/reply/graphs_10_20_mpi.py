@@ -19,10 +19,10 @@ comm = MPI.COMM_WORLD
 mpi_rank = comm.Get_rank()
 mpi_size = comm.Get_size()
 
-MIN_QUBITS = 4 ## CHANGE BACK
-N_GRAPHS = 1 ## CHANGE BACK
+MIN_QUBITS = 10 ## CHANGE BACK
+N_GRAPHS = 8 ## CHANGE BACK
 MPI_GROUP_TAG = 0 if mpi_rank%2==0 else 1
-N = MIN_QUBITS + 2*(1 + mpi_rank - MPI_GROUP_TAG)
+N = MIN_QUBITS + 2*(1 + mpi_rank//2)
 MCMC_PARAMS = dict(n_steps=4000, n_chains=6, warmup=2000, step=N)
 OUTPUT_FILENAME = f"{N}_qubits_{N_GRAPHS}_graphs_process_{MPI_GROUP_TAG+1}"
 P = 4
