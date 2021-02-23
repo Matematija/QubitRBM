@@ -19,11 +19,11 @@ comm = MPI.COMM_WORLD
 mpi_rank = comm.Get_rank()
 mpi_size = comm.Get_size()
 
-MIN_QUBITS = 10 ## CHANGE BACK
-N_GRAPHS = 8 ## CHANGE BACK
+MIN_QUBITS = 10
+N_GRAPHS = 5
 MPI_GROUP_TAG = 0 if mpi_rank%2==0 else 1
-N = MIN_QUBITS + 2*(1 + mpi_rank//2)
-MCMC_PARAMS = dict(n_steps=4000, n_chains=6, warmup=2000, step=N)
+N = MIN_QUBITS + 2*(mpi_rank//2)
+MCMC_PARAMS = dict(n_steps=2000, n_chains=4, warmup=1000, step=N)
 OUTPUT_FILENAME = f"{N}_qubits_{N_GRAPHS}_graphs_process_{MPI_GROUP_TAG+1}"
 P = 4
 
@@ -62,34 +62,22 @@ for g in range(N_GRAPHS):
 
     print(f'{printout_tag} Finished initial QAOA angles optimization for graph {g+1}/{N_GRAPHS} at {N} qubits, p={P}, reached cost={costs[-1]} in {len(costs)} iterations.', flush=True)
 
-    # for p in [1,2,4]:
-
-        # qaoa = QAOA(G, p=p)
-
-        # angles, costs = qaoa.optimize(init=p*[np.pi/8] + p*[0.0], tol=1e-4, verbose=False)
-        # gammas, betas = np.split(angles, 2)
-
-        # data[f'p{p}_graph_{g}_opt_gammas'] = gammas
-        # data[f'p{p}_graph_{g}_opt_betas'] = betas
-        # data[f'p{p}_graph_{g}_opt_cost'] = costs[-1]
-
-        # print(f'Finished initial QAOA angles optimization for graph {g+1}/{N_GRAPHS} at {N} qubits, p={p}, reached cost={costs[-1]} in {len(costs)} iterations.', flush=True)
-
     logpsi = RBM(N)
     optim = Optimizer(logpsi, **MCMC_PARAMS)
 
     for p in range(1,P+1):
 
         logpsi.UC(G, gammas[p-1])
+        optim.machine = logpsi
 
         if p>1:
             # Compression:
 
             aux = RBM(N)
-            aux.UC(G, np.sum(gammas[:p]), mask=False)
+            aux.UC(G, np.sum(gammas[:p-1]), mask=False)
             init_params = deepcopy(aux.params)
 
-            params, history = optim.sr_compress(init=init_params, resample_phi=2, verbose=False)
+            params, history = optim.sr_compress(init=init_params, lookback=10, resample_phi=2, verbose=False)
             print(f'{printout_tag} Finished compression at p={p}, graph {g+1}/{N_GRAPHS}, reached fidelity {history[-1]}', flush=True)
 
             nh = (len(params) - N)//(N+1)
@@ -97,7 +85,9 @@ for g in range(N_GRAPHS):
                                             ('a', params[:N]),
                                             ('b', params[N:(N+nh)]),
                                             ('W', params[(N+nh):].reshape(N,-1))])
-            
+
+        optim.machine = logpsi
+
         for n in range(N):
             params, history = optim.sr_rx(n=n, beta=betas[p-1], lookback=5, resample_phi=3, eps=1e-4, verbose=False)
             logpsi.params = params
