@@ -75,7 +75,7 @@ for g in range(N_GRAPHS):
             # Compression:
 
             aux = RBM(N)
-            aux.UC(G, np.sum(gammas[:p-1]), mask=False)
+            aux.UC(G, np.mean(gammas[:p]), mask=False)
             init_params = deepcopy(aux.params)
 
             for counter in range(COMPRESSION_ATTEMPTS):
@@ -90,10 +90,9 @@ for g in range(N_GRAPHS):
             print(f'{printout_tag} Finished compression at p={p}, graph {g+1}/{N_GRAPHS}, reached fidelity {history[-1]} after {counter+1} attempts', flush=True)
 
             nh = (len(params) - N)//(N+1)
-            logpsi.state_dict = OrderedDict([('C', logpsi.C),
-                                            ('a', params[:N]),
-                                            ('b', params[N:(N+nh)]),
-                                            ('W', params[(N+nh):].reshape(N,-1))])
+            logpsi = RBM(N, nh)
+            logpsi.params = params
+            optim.machine = logpsi
 
         for n in range(N):
             params, history = optim.sr_rx(n=n, beta=betas[p-1], lookback=5, resample_phi=3, eps=1e-4, verbose=False)
