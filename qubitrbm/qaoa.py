@@ -373,6 +373,7 @@ class QAOA:
         t = 0
         clock = time()
         history = []
+        f, old_f = 0.0, 0.0
 
         while True:
 
@@ -391,19 +392,21 @@ class QAOA:
 
             d_params = lr * m_hat/(np.sqrt(v_hat) + eps)
 
-            if np.any(d_params > tol):
-                params -= d_params
-            else:
-                break
-
             g, b = np.split(params, 2) if self.p > 1 else params
 
+            old_f = f
+            
             if self.p > 1:
                 f = self.num_cost_from_params(g, b, hilbert=hilbert)
             else:
                 f = self.exact_cost(g, b)
 
             history.append(f)
+
+            if np.abs(f - old_f) > tol:
+                params -= d_params
+            else:
+                break
 
             if time() - clock > 10 and verbose:
                 print('Iteration {:3d} | Cost = {:05.4f}'.format(t, f))
