@@ -145,9 +145,16 @@ class Optimizer:
 
     @staticmethod
     def grad_maxcut_cost(Os, costs):
-        term_1 = (costs.reshape(-1,1)*Os.conj()).mean(axis=0)
-        term_2 = costs.mean()*Os.conj().mean(axis=0)
-        return term_1 - term_2
+        """
+        Calculates the gradient of the MaxCut cost w.r.t. to the RBM parameters when trying to directly fit the RBM to the MaxCut optimal state (no QAOA). Used in Optimizer.direct_sr.
+
+        Os: numpy.array of shape [batch_size, number_of_parameters]
+            Parameter gradients of the log-RBM ansatz (outputs of RBM.grad_log).
+
+        costs: numpy array of shape [batch_size]
+            MaxCut cost values corresponding to each entry in `Os`.
+        """
+        return (costs.reshape(-1,1)*Os.conj()).mean(axis=0) - costs.mean()*Os.conj().mean(axis=0)
     
     def sr_rx(self, n, beta, tol=1e-3, lookback=5, max_iters=1000, resample_phi=None,
         lr=1e-1, lr_tau=None, lr_min=0.0, eps=1e-4, verbose=False):
@@ -195,7 +202,6 @@ class Optimizer:
         """
         
         nv, nh = self.machine.nv, self.machine.nh
-
         logpsi = deepcopy(self.machine)
 
         if np.abs(np.sin(beta)) > np.abs(np.cos(beta)):
@@ -360,6 +366,21 @@ class Optimizer:
         return 1.0 - utils.mcmc_fidelity(aux(aux_samples), aux(target_samples), self.machine(aux_samples), self.machine(target_samples))
 
     def optimal_compression_init(self, G, tol=1e-2, **kwargs):
+
+        """
+        Calculates the optimal initializer for the compression step by using `scipy.optimize.minimize_scalar` to maximize the fidelity between initial and final states.
+
+        G: nx.Graph
+            The underlying MaxCut graph.
+
+        tol: float
+            Optimization tolerance, passed to `scipy.optimize.minimize_scalar`.
+
+        kwargs:
+            Additional keyword arguments to pass to `scipy.optimize.minimize_scalar`.
+
+        Returns: A float representing the initial angle gamma that maximizes <rbm| U_C(gamma) |+> (rbm = `self.machine`).
+        """
 
         target_samples = self.machine.get_samples(**self.mcmc_params)
         res = minimize_scalar(fun=self.__compression_init_infidelity, bounds=(-np.pi/2, np.pi/2), args=(G, target_samples), tol=tol, **kwargs)
