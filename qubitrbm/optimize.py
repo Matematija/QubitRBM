@@ -1,9 +1,11 @@
 import numpy as np
 from scipy.linalg import solve
 from scipy.special import logsumexp
+from scipy.optimize import minimize_scalar
 
 from collections import OrderedDict
 from time import time
+from warnings import warn
 from copy import deepcopy
 import os, sys
 
@@ -345,6 +347,27 @@ class Optimizer:
                 clock = time()
 
         return logpsi.params, np.asarray(history)
+
+    def __compression_init_infidelity(self, gamma, G, target_samples=None):
+
+        if target_samples is None:
+            target_samples = self.machine.get_samples(**self.mcmc_params)
+
+        aux = RBM(self.machine.nv)
+        aux.UC(G, gamma, mask=False)
+        aux_samples = aux.get_samples(**self.mcmc_params)
+
+        return 1.0 - utils.mcmc_fidelity(aux(aux_samples), aux(target_samples), self.machine(aux_samples), self.machine(target_samples))
+
+    def optimal_compression_init(self, G, tol=1e-2, **kwargs):
+
+        target_samples = self.machine.get_samples(**self.mcmc_params)
+        res = minimize_scalar(fun=self.__compression_init_infidelity, bounds=(-np.pi/2, np.pi/2), args=(G, target_samples), tol=tol, **kwargs)
+
+        if not res.success:
+            warn(f'The optimizer failed, optimum may not be reliable! Result: {res.x}')
+
+        return res.x
     
     # def adam_compress(self, rbm, init, lr=1e-3, tol=1e-3, lookback=20, resample_phi=None, max_iters=1000,
     #                  betas=(0.9, 0.999), eps=1e-6, verbose=False):
