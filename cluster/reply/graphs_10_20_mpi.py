@@ -23,8 +23,8 @@ MIN_QUBITS = 10
 N_GRAPHS = 5
 MPI_GROUP_TAG = 0 if mpi_rank%2==0 else 1
 N = MIN_QUBITS + 2*(mpi_rank//2)
-MCMC_PARAMS = dict(n_steps=2000, n_chains=4, warmup=1000, step=N)
-OUTPUT_FILENAME = f"{N}_qubits_{N_GRAPHS}_graphs_process_{MPI_GROUP_TAG+1}"
+MCMC_PARAMS = OrderedDict(n_steps=4000, n_chains=8, warmup=1000, step=N)
+OUTPUT_FILENAME = f'{N}_qubits_{N_GRAPHS}_graphs_process_{MPI_GROUP_TAG+1}'
 COMPRESSION_ATTEMPTS = 10
 P = 4
 
@@ -54,7 +54,7 @@ for g in range(N_GRAPHS):
 
     print(f'{printout_tag} Starting the initial QAOA angles optimization for graph {g+1}/{N_GRAPHS} at {N} qubits, p={P}', flush=True)
 
-    angles, costs = qaoa.optimize(init=P*[-np.pi/8] + P*[np.pi/8], lr=1e-3, tol=1e-3, dx=1e-7, verbose=False)
+    angles, costs = qaoa.optimize(init=P*[np.pi/8] + P*[-np.pi/8], lr=1e-3, tol=1e-3, dx=1e-7, verbose=False)
     gammas, betas = np.split(angles, 2)
 
     data[f'graph_{g}_opt_gammas'] = gammas
@@ -74,8 +74,10 @@ for g in range(N_GRAPHS):
         if p>1:
             # Compression:
 
+            gamma_init = optim.optimal_compression_init(G)
+
             aux = RBM(N)
-            aux.UC(G, np.mean(gammas[:p]), mask=False)
+            aux.UC(G, gamma_init, mask=False)
             init_params = deepcopy(aux.params)
 
             for counter in range(COMPRESSION_ATTEMPTS):
