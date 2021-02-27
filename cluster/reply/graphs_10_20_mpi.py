@@ -23,8 +23,8 @@ MIN_QUBITS = 10
 N_GRAPHS = 5
 MPI_GROUP_TAG = 0 if mpi_rank%2==0 else 1
 N = MIN_QUBITS + 2*(mpi_rank//2)
-MCMC_PARAMS = OrderedDict(n_steps=4000, n_chains=8, warmup=1000, step=N)
-OUTPUT_FILENAME = f'{N}_qubits_{N_GRAPHS}_graphs_process_{MPI_GROUP_TAG+1}'
+MCMC_PARAMS = OrderedDict(n_steps=8000, n_chains=4, warmup=1500, step=N)
+OUTPUT_FILENAME = f'{N}_qubits_{N_GRAPHS}_graphs_process_{MPI_GROUP_TAG+1}_high_mcmc'
 COMPRESSION_ATTEMPTS = 10
 P = 4
 
@@ -81,7 +81,7 @@ for g in range(N_GRAPHS):
             init_params = deepcopy(aux.params)
 
             for counter in range(COMPRESSION_ATTEMPTS):
-                params, history = optim.sr_compress(init=init_params, lookback=20, resample_phi=5, verbose=False)
+                params, history = optim.sr_compress(init=init_params, lookback=25, resample_phi=2, verbose=False)
 
                 if history[-1] > 0.9:
                     break
@@ -97,7 +97,7 @@ for g in range(N_GRAPHS):
             optim.machine = logpsi
 
         for n in range(N):
-            params, history = optim.sr_rx(n=n, beta=betas[p-1], lookback=5, resample_phi=3, eps=1e-4, verbose=False)
+            params, history = optim.sr_rx(n=n, beta=betas[p-1], lr=7e-2, lookback=8, resample_phi=6, eps=1e-4, verbose=False)
             logpsi.params = params
             print(f'{printout_tag} Done with qubit {n+1}/{N} at graph {g+1}/{N_GRAPHS}, depth p={p}/{P}, reached fidelity {history[-1]}', flush=True)
 
