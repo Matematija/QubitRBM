@@ -98,7 +98,7 @@ for g in range(N_GRAPHS):
             optim.machine = logpsi
 
         for n in range(N):
-            params, history = optim.sr_rx(n=n, beta=betas[p-1], lr=7e-2, lookback=8, resample_phi=6, eps=1e-4, verbose=False)
+            params, history = optim.sr_rx(n=n, beta=betas[p-1], lr=1e-1, lookback=5, resample_phi=5, eps=1e-4, verbose=False)
             logpsi.params = params
             print(f'{printout_tag} Done with qubit {n+1}/{N} at graph {g+1}/{N_GRAPHS}, depth p={p}/{P}, reached fidelity {history[-1]}', flush=True)
 
