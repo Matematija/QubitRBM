@@ -23,8 +23,8 @@ MIN_QUBITS = 10
 N_GRAPHS = 5
 MPI_GROUP_TAG = 0 if mpi_rank%2==0 else 1
 N = MIN_QUBITS + 2*(mpi_rank//2)
-MCMC_PARAMS = OrderedDict(n_steps=8000, n_chains=4, warmup=1500, step=N)
-OUTPUT_FILENAME = f'{N}_qubits_{N_GRAPHS}_graphs_process_{MPI_GROUP_TAG+1}_high_mcmc'
+MCMC_PARAMS = OrderedDict(n_steps=3000, n_chains=4, warmup=1000, step=N)
+OUTPUT_FILENAME = f'{N}_qubits_{N_GRAPHS}_graphs_process_{MPI_GROUP_TAG+1}_2_alpha'
 COMPRESSION_ATTEMPTS = 10
 P = 4
 
@@ -78,10 +78,11 @@ for g in range(N_GRAPHS):
 
             aux = RBM(N)
             aux.UC(G, gamma_init, mask=False)
+            aux.add_hidden_units(num=2*N - aux.nh)
             init_params = deepcopy(aux.params)
 
             for counter in range(COMPRESSION_ATTEMPTS):
-                params, history = optim.sr_compress(init=init_params, lookback=25, resample_phi=2, verbose=False)
+                params, history = optim.sr_compress(init=init_params, lookback=30, resample_phi=2, verbose=False)
 
                 if history[-1] > 0.9:
                     break
