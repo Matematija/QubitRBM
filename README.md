@@ -5,6 +5,14 @@ A Quantum circuit simulator based on Restricted Boltzmann Machines, focusing on 
 
 Examples can be seen in the [examples](./examples/) folder and all functions/classes have been documented within the source code. We describe some of the basic functionality here:
 
+## Installation
+After cloning the repo, just run
+
+```bash
+cd QubitRBM
+pip install . 
+```
+
 ## Restricted Boltzmann Machines (RBMs)
 
 We provide a `RBM` class with custom methods implementing ansatz/gradients evaluations,
