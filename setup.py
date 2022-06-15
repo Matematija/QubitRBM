@@ -8,7 +8,7 @@ setup(
         An approximate Quantum circuit simulator based on Restricted Boltzmann Machines,
         focusing on the Quantum Approximate Optimization Algorithm (QAOA).
         """,
-    url = 'https://github.com/Matematija/NeuralFRG',
+    url = 'https://github.com/Matematija/QubitRBM',
     author = 'Matija Medvidovic',
     author_email = 'matija.medvidovic@columbia.edu',
     license = 'Apache License Version 2.0',
