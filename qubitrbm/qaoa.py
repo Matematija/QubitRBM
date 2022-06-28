@@ -1,16 +1,11 @@
 import numpy as np
 import networkx as nx
 
-import os, sys
 from time import time
 
 import sympy, cirq
-    
-libpath = os.path.abspath('..')
-if libpath not in sys.path:
-    sys.path.append(libpath)
 
-import qubitrbm.utils as utils
+from .utils import hilbert_iter
 
 class QAOA:
     
@@ -75,7 +70,7 @@ class QAOA:
     @graph.setter
     def graph(self, G):
 
-        assert isinstance(G, nx.Graph), 'Expected a nx.Graph instance, got {}'.format(type(graph))
+        assert isinstance(G, nx.Graph), 'Expected a nx.Graph instance, got {}'.format(type(G))
 
         self.__graph = G.copy()
         self.__circuit_graph = nx.relabel_nodes( G, mapping={i: self.qubits[i] for i in range(self.n_qubits)} )
@@ -199,7 +194,7 @@ class QAOA:
         """
 
         if hilbert is None:
-            hilbert  = np.array(list(utils.hilbert_iter(self.n_qubits))) 
+            hilbert  = np.array(list(hilbert_iter(self.n_qubits))) 
 
         return np.sum(probs*self.cost(hilbert))
 
@@ -226,7 +221,7 @@ class QAOA:
         """
 
         if method.lower() == 'exact':
-            psi = self.simulate(gamma, beta).final_state
+            psi = self.simulate(gamma, beta).final_state_vector
             p = np.abs(psi)**2
             return self.cost_from_probs(p, **kwargs)
 
@@ -254,15 +249,15 @@ class QAOA:
             A 1d numpy.array of length 2p: first p elements represent gradients w.r.t. QAOA \gamma parameters and the second p elements represent gradients w.r.t. QAOA \beta parameters.
         """
 
-        gs = np.atleast_1d(gamma)
-        bs = np.atleast_1d(beta)
+        gamma = np.atleast_1d(gamma)
+        beta = np.atleast_1d(beta)
 
         grad = np.empty(shape=2*self.p)
 
         if hilbert is None:
-            hilbert  = np.array(list(utils.hilbert_iter(self.n_qubits)))
+            hilbert  = np.array(list(hilbert_iter(self.n_qubits)))
 
-        for j, (g, b) in enumerate(zip(gs, bs)):
+        for j in range(self.p):
             
             e = np.zeros(self.p)
             e[j] = 1
@@ -364,7 +359,7 @@ class QAOA:
             params = np.asarray_chkfinite(init, dtype=float)
 
         if hilbert is None and self.p > 1:
-            hilbert = np.array(list(utils.hilbert_iter(self.n_qubits)))
+            hilbert = np.array(list(hilbert_iter(self.n_qubits)))
 
         g, b = np.split(params, 2) if self.p > 1 else params
 

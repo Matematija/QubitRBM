@@ -1,22 +1,16 @@
 import numpy as np
 from scipy.linalg import solve
-from scipy.special import logsumexp
 from scipy.optimize import minimize_scalar
 
 from collections import OrderedDict
 from time import time
 from warnings import warn
 from copy import deepcopy
-import os, sys
 
 from numba import njit
 
-libpath = os.path.abspath('..')
-if libpath not in sys.path:
-    sys.path.append(libpath)
-
-from qubitrbm.rbm import RBM
-import qubitrbm.utils as utils
+from .rbm import RBM
+from .utils import mcmc_fidelity
 
 class Optimizer:
     
@@ -117,7 +111,7 @@ class Optimizer:
     
     def _sr_update(self, O, psipsi, psiphi, phipsi, phiphi, eps):
         
-        F = utils.mcmc_fidelity(psipsi, psiphi, phipsi, phiphi)
+        F = mcmc_fidelity(psipsi, psiphi, phipsi, phiphi)
         grad = self.__grad_F(O, F, psipsi, phipsi)
         
         S = self.__S_matrix(O)
@@ -363,7 +357,7 @@ class Optimizer:
         aux.UC(G, gamma, mask=False)
         aux_samples = aux.get_samples(**self.mcmc_params)
 
-        return 1.0 - utils.mcmc_fidelity(aux(aux_samples), aux(target_samples), self.machine(aux_samples), self.machine(target_samples))
+        return 1.0 - mcmc_fidelity(aux(aux_samples), aux(target_samples), self.machine(aux_samples), self.machine(target_samples))
 
     def optimal_compression_init(self, G, tol=1e-2, **kwargs):
 

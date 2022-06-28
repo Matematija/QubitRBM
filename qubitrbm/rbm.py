@@ -3,14 +3,8 @@ from scipy.special import logsumexp
 from collections import OrderedDict
 
 from numba import njit
-import os, sys
 
-libpath = os.path.abspath('..')
-if libpath not in sys.path:
-    sys.path.append(libpath)
-
-import qubitrbm.utils as utils
-from qubitrbm.utils import log1pexp, logaddexp
+from .utils import log1pexp, logaddexp, fold_imag, hilbert_iter, sigmoid
 
 @njit
 def _eval_RBM_from_params(B, C, a, b, W):
@@ -238,8 +232,8 @@ class RBM:
 
         Returns: None
         """
-        self.C = utils.fold_imag(self.C)
-        self.params = utils.fold_imag(self.params)
+        self.C = fold_imag(self.C)
+        self.params = fold_imag(self.params)
 
     def iter_samples(self, n_steps, state=None, init=None, n_chains=1, warmup=0, step=1, T=1.0, verbose=False, n=None, beta=None):
         
@@ -386,7 +380,7 @@ class RBM:
         """
 
         if hilbert is None:
-            hilbert = np.array(list(utils.hilbert_iter(self.nv)), dtype=np.bool)
+            hilbert = np.array(list(hilbert_iter(self.nv)), dtype=np.bool)
 
         if state is None:
             logvals = self(hilbert)
@@ -406,7 +400,7 @@ class RBM:
     @njit
     def __grad_log_from_params(B, a, b, W):
         ga = B.copy()
-        gb = utils.sigmoid(b + np.dot(B, W))
+        gb = sigmoid(b + np.dot(B, W))
         gW = np.expand_dims(ga, 2)*np.expand_dims(gb, 1)
         return ga, gb, gW
 
@@ -442,7 +436,7 @@ class RBM:
         """
         
         if hilbert is None:
-            hilbert = np.array(list(utils.hilbert_iter(self.nv))) 
+            hilbert = np.array(list(hilbert_iter(self.nv))) 
         
         if state is None:
             logvals = self(hilbert)
@@ -493,7 +487,7 @@ class RBM:
         res = self.__eval_from_params(B, CX, aX, bX, WX)
 
         if fold:
-            return utils.fold_imag(res)
+            return fold_imag(res)
         else:
             return res
         
@@ -524,7 +518,7 @@ class RBM:
         res = self.__eval_from_params(B, CZ, aZ, bZ, WZ)
         
         if fold:
-            return utils.fold_imag(res)
+            return fold_imag(res)
         else:
             res
     
